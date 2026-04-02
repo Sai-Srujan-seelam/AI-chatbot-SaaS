@@ -1,0 +1,25 @@
+{
+  "name": "ai-saas",
+  "version": "1.0.0",
+  "description": "A managed AI chatbot platform. Clients sign up, paste a `<script>` tag into their site (WordPress, Wix, Shopify, raw HTML), and get a trained AI chat assistant that knows their business.",
+  "main": "index.js",
+  "scripts": {
+    "dev": "serve widget -l 8080 --no-clipboard",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Sai-Srujan-seelam/AI-chatbot-SaaS.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/Sai-Srujan-seelam/AI-chatbot-SaaS/issues"
+  },
+  "homepage": "https://github.com/Sai-Srujan-seelam/AI-chatbot-SaaS#readme",
+  "dependencies": {
+    "serve": "^14.2.6"
+  }
+}

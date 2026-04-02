@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WonderChat Widget Test</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 40px 20px;
+            background: #f9fafb;
+            color: #1a1a1a;
+        }
+        h1 { color: #111827; margin-bottom: 8px; }
+        p { color: #6b7280; line-height: 1.6; }
+        .card {
+            background: #fff;
+            border-radius: 12px;
+            padding: 24px;
+            margin: 20px 0;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        code {
+            background: #f3f4f6;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 13px;
+        }
+        pre {
+            background: #1f2937;
+            color: #e5e7eb;
+            padding: 16px;
+            border-radius: 8px;
+            overflow-x: auto;
+            font-size: 13px;
+        }
+        .steps { counter-reset: step; list-style: none; padding: 0; }
+        .steps li {
+            counter-increment: step;
+            padding: 8px 0;
+            padding-left: 36px;
+            position: relative;
+        }
+        .steps li::before {
+            content: counter(step);
+            position: absolute;
+            left: 0;
+            width: 24px;
+            height: 24px;
+            background: #2563eb;
+            color: #fff;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: 600;
+        }
+    </style>
+</head>
+<body>
+
+<h1>WonderChat — Widget Test Page</h1>
+<p>This page simulates a client's website with the chat widget embedded.</p>
+
+<div class="card">
+    <h2>Sample Business Content</h2>
+    <p>Welcome to <strong>Oakton Family Dental</strong>. We provide comprehensive dental care for the whole family, including cleanings, fillings, crowns, implants, and cosmetic dentistry.</p>
+    <p>Our office hours are Monday-Friday 8am-5pm. We accept most major insurance plans. Call us at (555) 123-4567 to schedule your appointment.</p>
+</div>
+
+<div class="card">
+    <h2>How It Works</h2>
+    <ol class="steps">
+        <li>Create a tenant via the Admin API</li>
+        <li>Ingest the client's website content</li>
+        <li>Embed the widget script tag on the client's site</li>
+        <li>Visitors chat with an AI trained on the client's content</li>
+    </ol>
+</div>
+
+<div class="card">
+    <h2>Embed Code</h2>
+    <p>Replace <code>YOUR_API_KEY</code> with the key from tenant creation:</p>
+    <pre>&lt;script
+    src="http://localhost:8000/static/widget.js"
+    data-key="YOUR_API_KEY"
+    data-api="http://localhost:8000"
+    data-color="#2563eb"
+    data-position="bottom-right"
+    defer
+&gt;&lt;/script&gt;</pre>
+</div>
+
+<!-- WonderChat Widget — replace YOUR_API_KEY after creating a tenant -->
+<script
+    src="wonderchat-widget.js"
+    data-key="YOUR_API_KEY"
+    data-api="http://localhost:8000"
+    data-color="#2563eb"
+    data-position="bottom-right"
+    data-header="Chat with us"
+    defer
+></script>
+
+</body>
+</html>
