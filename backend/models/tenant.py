@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime, timezone
-from sqlalchemy import String, DateTime, JSON
+from sqlalchemy import String, DateTime, JSON, Integer
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from backend.database import Base
@@ -18,7 +18,19 @@ class Tenant(Base):
     api_key_prefix: Mapped[str] = mapped_column(String(12), nullable=False)
     widget_config: Mapped[dict] = mapped_column(JSON, default=dict)
     is_active: Mapped[bool] = mapped_column(default=True)
+
+    # Billing and limits
+    subscription_tier: Mapped[str] = mapped_column(String(20), default="free")
     max_conversations_per_month: Mapped[int] = mapped_column(default=500)
+    conversations_this_month: Mapped[int] = mapped_column(Integer, default=0)
+    current_billing_period_start: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+    # Contact
+    contact_email: Mapped[str | None] = mapped_column(String(255), nullable=True)
+
+    # Timestamps
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )

@@ -88,10 +88,21 @@
     src="http://localhost:8000/static/widget.js"
     data-key="YOUR_API_KEY"
     data-api="http://localhost:8000"
-    data-color="#2563eb"
-    data-position="bottom-right"
     defer
 &gt;&lt;/script&gt;</pre>
+    <p style="margin-top: 12px; font-size: 13px;">Colors, position, icons, avatar, and branding are all configured server-side via the admin API. The widget fetches its config on load.</p>
+</div>
+
+<div class="card">
+    <h2>Public JS API</h2>
+    <p>Control the widget programmatically after it loads:</p>
+    <pre>WonderChat.open()        // open the chat window
+WonderChat.close()       // close it
+WonderChat.toggle()      // toggle open/close
+WonderChat.sendMessage("Hi!")  // send a message
+WonderChat.clearHistory() // clear chat history
+WonderChat.isOpen()      // returns true/false
+WonderChat.getSessionId() // returns session ID</pre>
 </div>
 
 <!-- WonderChat Widget — replace YOUR_API_KEY after creating a tenant -->

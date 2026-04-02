@@ -66,4 +66,12 @@ app.include_router(admin_router, prefix="/api/v1/admin", tags=["Admin"])
 
 @app.get("/health")
 async def health_check():
-    return {"status": "ok", "version": "0.1.0"}
+    """Health check with database connectivity test."""
+    try:
+        async with engine.connect() as conn:
+            await conn.execute(__import__("sqlalchemy").text("SELECT 1"))
+        db_status = "connected"
+    except Exception:
+        db_status = "disconnected"
+
+    return {"status": "ok", "version": "0.1.0", "database": db_status}

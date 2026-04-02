@@ -77,6 +77,14 @@ async def get_or_create_conversation(
         db.add(conv)
         await db.flush()
 
+        # Increment monthly conversation counter on the tenant
+        tenant_result = await db.execute(
+            select(Tenant).where(Tenant.id == tenant_id)
+        )
+        tenant_obj = tenant_result.scalar_one_or_none()
+        if tenant_obj:
+            tenant_obj.conversations_this_month = (tenant_obj.conversations_this_month or 0) + 1
+
     return conv
 
 
@@ -87,9 +95,16 @@ async def chat(
     tenant: Tenant = Depends(authenticate_api_key),
     db: AsyncSession = Depends(get_db),
 ):
-    """Main chat endpoint — the core of the product."""
+    """Main chat endpoint -- the core of the product."""
     # Rate limit
     await rate_limit(request)
+
+    # Enforce monthly conversation limit
+    if tenant.conversations_this_month >= tenant.max_conversations_per_month:
+        return ChatResponse(
+            reply=f"This chat is temporarily unavailable. Please contact {tenant.name} directly.",
+            session_id=req.session_id,
+        )
 
     # Validate and sanitize input
     message = validate_user_input(req.message)
