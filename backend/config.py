@@ -9,8 +9,8 @@ class Settings(BaseSettings):
     debug: bool = True
 
     # Database
-    database_url: str = "postgresql+asyncpg://wonder:localdev123@localhost:5432/wonderchat"
-    database_url_sync: str = "postgresql://wonder:localdev123@localhost:5432/wonderchat"
+    database_url: str = "postgresql+asyncpg://wonder:localdev123@localhost:5433/wonderchat"
+    database_url_sync: str = "postgresql://wonder:localdev123@localhost:5433/wonderchat"
 
     # Redis
     redis_url: str = "redis://localhost:6379"
