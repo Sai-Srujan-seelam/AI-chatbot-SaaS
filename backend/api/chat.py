@@ -1,7 +1,7 @@
 import logging
 from fastapi import APIRouter, Depends, Request
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, text, update
+from sqlalchemy import select, text
 from backend.database import get_db
 from backend.models.tenant import Tenant
 from backend.models.document import Document

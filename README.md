@@ -57,6 +57,14 @@ Client's website                          Your backend
 - Session persistence within a tab
 - Configurable colors, position, header text, bot name
 
+**Admin dashboard** -- Next.js, full tenant management UI
+- Token-based login (uses your APP_SECRET_KEY)
+- Dashboard home with server health, stat cards, tenant overview
+- Tenant list with search, create, delete, and pagination
+- Tenant detail with tabbed views: overview, ingestion, widget config, conversations, documents
+- Trigger website scraping and monitor ingestion from the browser
+- Edit all 25+ widget config fields with color pickers and live toggles
+
 **Infrastructure** -- Docker Compose, two containers
 - PostgreSQL 16 with pgvector extension
 - Redis 7 for rate limiting and caching
@@ -84,6 +92,17 @@ uvicorn backend.main:app --reload --port 8000
 ```
 
 API docs are at `http://localhost:8000/docs` once the server is running.
+
+### Admin dashboard (optional)
+
+```bash
+cd admin
+npm install
+npm run dev
+# Open http://localhost:3000 and sign in with your APP_SECRET_KEY
+```
+
+Set `NEXT_PUBLIC_API_URL` if your backend runs somewhere other than `http://localhost:8000`.
 
 ### Create a tenant and ingest their site
 
@@ -180,6 +199,10 @@ Full interactive docs at `/docs` (Swagger) or `/redoc` when the server is runnin
 ├── widget/
 │   ├── wonderchat-widget.js     # Embeddable chat widget (Shadow DOM)
 │   └── test.html                # Test page simulating a client site
+├── admin/                       # Next.js admin dashboard
+│   ├── src/app/                 # App router pages (login, dashboard, tenants)
+│   ├── src/components/          # Sidebar, auth guard
+│   └── src/lib/api.ts           # Typed API client
 ├── static/
 │   └── widget.js                # Served by the backend at /static
 ├── alembic/                     # Database migrations
@@ -235,7 +258,7 @@ See [SECURITY.md](SECURITY.md) for the vulnerability disclosure policy.
 
 Things I'm planning to build next. PRs welcome for any of these.
 
-- [ ] Admin dashboard (Next.js) with onboarding flow, analytics, and conversation logs
+- [x] Admin dashboard (Next.js) with tenant management, analytics, and conversation logs
 - [ ] Lead capture (name, email, phone) when the bot can't answer
 - [ ] Appointment booking integration (Calendly, Acuity)
 - [ ] Human handoff with Slack/email notifications
