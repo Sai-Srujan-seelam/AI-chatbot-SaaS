@@ -1,0 +1,583 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { useParams, useRouter } from "next/navigation";
+import Link from "next/link";
+import Sidebar from "@/components/sidebar";
+import {
+  getTenant, getTenantStats, updateTenant, deleteTenant, rotateApiKey,
+  ingestWebsite, listDocuments, listConversations,
+  type Tenant, type TenantStats,
+} from "@/lib/api";
+
+export default function TenantDetailPage() {
+  const params = useParams();
+  const router = useRouter();
+  const id = params.id as string;
+
+  const [tenant, setTenant] = useState<Tenant | null>(null);
+  const [stats, setStats] = useState<TenantStats | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [tab, setTab] = useState<"overview" | "ingest" | "widget" | "conversations" | "documents">("overview");
+
+  async function load() {
+    try {
+      const [t, s] = await Promise.all([getTenant(id), getTenantStats(id)]);
+      setTenant(t);
+      setStats(s);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => { load(); }, [id]);
+
+  if (loading) return <LoadingPage />;
+  if (!tenant) return <NotFoundPage />;
+
+  const tabs = [
+    { key: "overview", label: "Overview" },
+    { key: "ingest", label: "Ingestion" },
+    { key: "widget", label: "Widget config" },
+    { key: "conversations", label: "Conversations" },
+    { key: "documents", label: "Documents" },
+  ] as const;
+
+  return (
+    <div className="flex min-h-screen">
+      <Sidebar />
+      <main className="flex-1 p-8">
+        {/* Header */}
+        <div className="flex items-start justify-between mb-6">
+          <div>
+            <Link href="/tenants" className="text-sm text-gray-500 hover:text-gray-700 mb-1 inline-block">&larr; All tenants</Link>
+            <h2 className="text-2xl font-bold text-gray-900">{tenant.name}</h2>
+            <p className="text-sm text-gray-500">{tenant.domain}</p>
+          </div>
+          <div className="flex gap-2">
+            <button
+              onClick={async () => {
+                await updateTenant(id, { is_active: !tenant.is_active });
+                load();
+              }}
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium border ${
+                tenant.is_active ? "text-red-600 border-red-200 hover:bg-red-50" : "text-green-600 border-green-200 hover:bg-green-50"
+              }`}
+            >
+              {tenant.is_active ? "Deactivate" : "Activate"}
+            </button>
+            <button
+              onClick={async () => {
+                if (confirm("Delete this tenant and ALL their data?")) {
+                  await deleteTenant(id);
+                  router.push("/tenants");
+                }
+              }}
+              className="px-3 py-1.5 rounded-lg text-xs font-medium text-red-600 border border-red-200 hover:bg-red-50"
+            >
+              Delete
+            </button>
+          </div>
+        </div>
+
+        {/* Tabs */}
+        <div className="border-b border-gray-200 mb-6">
+          <nav className="flex gap-6">
+            {tabs.map((t) => (
+              <button
+                key={t.key}
+                onClick={() => setTab(t.key)}
+                className={`pb-3 text-sm font-medium border-b-2 transition-colors ${
+                  tab === t.key ? "border-gray-900 text-gray-900" : "border-transparent text-gray-500 hover:text-gray-700"
+                }`}
+              >
+                {t.label}
+              </button>
+            ))}
+          </nav>
+        </div>
+
+        {/* Tab content */}
+        {tab === "overview" && <OverviewTab tenant={tenant} stats={stats} onRefresh={load} />}
+        {tab === "ingest" && <IngestTab tenantId={id} onRefresh={load} />}
+        {tab === "widget" && <WidgetConfigTab tenant={tenant} onRefresh={load} />}
+        {tab === "conversations" && <ConversationsTab tenantId={id} />}
+        {tab === "documents" && <DocumentsTab tenantId={id} />}
+      </main>
+    </div>
+  );
+}
+
+// --- Overview Tab ---
+function OverviewTab({ tenant, stats, onRefresh }: { tenant: Tenant; stats: TenantStats | null; onRefresh: () => void }) {
+  const [newKey, setNewKey] = useState<string | null>(null);
+  const [editing, setEditing] = useState(false);
+
+  return (
+    <div className="space-y-6">
+      {/* Stats cards */}
+      {stats && (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <MiniStat label="Conversations" value={stats.total_conversations} />
+          <MiniStat label="Messages" value={stats.total_messages} />
+          <MiniStat label="Document chunks" value={stats.document_chunks} />
+          <MiniStat label="Usage this month" value={`${stats.usage_percent}%`} />
+        </div>
+      )}
+
+      {/* Tenant info */}
+      <div className="bg-white rounded-xl border border-gray-200 p-6 space-y-4">
+        <h3 className="font-semibold text-gray-900">Details</h3>
+        <div className="grid grid-cols-2 gap-4 text-sm">
+          <div><span className="text-gray-500">Tier:</span> <span className="font-medium ml-2">{tenant.subscription_tier}</span></div>
+          <div><span className="text-gray-500">Status:</span> <span className={`font-medium ml-2 ${tenant.is_active ? "text-green-600" : "text-red-500"}`}>{tenant.is_active ? "Active" : "Inactive"}</span></div>
+          <div><span className="text-gray-500">Email:</span> <span className="font-medium ml-2">{tenant.contact_email || "-"}</span></div>
+          <div><span className="text-gray-500">Limit:</span> <span className="font-medium ml-2">{tenant.conversations_this_month}/{tenant.max_conversations_per_month} convos/mo</span></div>
+          <div><span className="text-gray-500">API key:</span> <span className="font-mono text-xs ml-2">{tenant.api_key_prefix}...</span></div>
+          <div><span className="text-gray-500">Created:</span> <span className="font-medium ml-2">{new Date(tenant.created_at).toLocaleString()}</span></div>
+        </div>
+      </div>
+
+      {/* API Key rotation */}
+      <div className="bg-white rounded-xl border border-gray-200 p-6">
+        <h3 className="font-semibold text-gray-900 mb-3">API key</h3>
+        {newKey ? (
+          <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
+            <p className="text-sm text-green-800 mb-1 font-medium">New key generated. Save it now -- it won&apos;t be shown again:</p>
+            <code className="block p-2 bg-white rounded text-xs font-mono break-all border">{newKey}</code>
+            <button onClick={() => setNewKey(null)} className="mt-2 text-xs text-green-700">Dismiss</button>
+          </div>
+        ) : (
+          <div className="flex items-center gap-3">
+            <code className="px-3 py-1.5 bg-gray-100 rounded text-xs font-mono">{tenant.api_key_prefix}...</code>
+            <button
+              onClick={async () => {
+                if (confirm("Rotate key? The old key will stop working immediately.")) {
+                  const res = await rotateApiKey(tenant.id);
+                  setNewKey(res.api_key);
+                  onRefresh();
+                }
+              }}
+              className="px-3 py-1.5 text-xs font-medium text-orange-600 border border-orange-200 rounded-lg hover:bg-orange-50"
+            >
+              Rotate key
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* Edit tenant */}
+      <div className="bg-white rounded-xl border border-gray-200 p-6">
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="font-semibold text-gray-900">Edit settings</h3>
+          <button onClick={() => setEditing(!editing)} className="text-xs text-blue-600 hover:text-blue-700">
+            {editing ? "Cancel" : "Edit"}
+          </button>
+        </div>
+        {editing && <EditForm tenant={tenant} onSaved={() => { setEditing(false); onRefresh(); }} />}
+      </div>
+    </div>
+  );
+}
+
+function EditForm({ tenant, onSaved }: { tenant: Tenant; onSaved: () => void }) {
+  const [saving, setSaving] = useState(false);
+
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setSaving(true);
+    const fd = new FormData(e.currentTarget);
+    try {
+      await updateTenant(tenant.id, {
+        name: fd.get("name"),
+        domain: fd.get("domain"),
+        contact_email: fd.get("email") || null,
+        subscription_tier: fd.get("tier"),
+        max_conversations_per_month: parseInt(fd.get("limit") as string) || 500,
+      });
+      onSaved();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Update failed");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="grid grid-cols-2 gap-4">
+      <Input label="Name" name="name" defaultValue={tenant.name} required />
+      <Input label="Domain" name="domain" defaultValue={tenant.domain} required />
+      <Input label="Contact email" name="email" type="email" defaultValue={tenant.contact_email || ""} />
+      <div>
+        <label className="block text-xs font-medium text-gray-700 mb-1">Tier</label>
+        <select name="tier" defaultValue={tenant.subscription_tier} className="w-full px-3 py-2 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500">
+          <option value="free">Free</option>
+          <option value="starter">Starter</option>
+          <option value="pro">Pro</option>
+          <option value="enterprise">Enterprise</option>
+        </select>
+      </div>
+      <Input label="Monthly conversation limit" name="limit" type="number" defaultValue={String(tenant.max_conversations_per_month)} />
+      <div className="col-span-2">
+        <button type="submit" disabled={saving} className="px-4 py-2 bg-gray-900 text-white rounded-lg text-sm font-medium hover:bg-gray-800 disabled:opacity-50">
+          {saving ? "Saving..." : "Save changes"}
+        </button>
+      </div>
+    </form>
+  );
+}
+
+// --- Ingest Tab ---
+function IngestTab({ tenantId, onRefresh }: { tenantId: string; onRefresh: () => void }) {
+  const [url, setUrl] = useState("");
+  const [maxPages, setMaxPages] = useState(50);
+  const [loading, setLoading] = useState(false);
+  const [result, setResult] = useState<{ pages_scraped: number; chunks_stored: number; error: string | null } | null>(null);
+
+  async function handleIngest(e: React.FormEvent) {
+    e.preventDefault();
+    setLoading(true);
+    setResult(null);
+    try {
+      const res = await ingestWebsite(tenantId, url, maxPages);
+      setResult(res);
+      onRefresh();
+    } catch (err) {
+      setResult({ pages_scraped: 0, chunks_stored: 0, error: err instanceof Error ? err.message : "Ingestion failed" });
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="bg-white rounded-xl border border-gray-200 p-6">
+        <h3 className="font-semibold text-gray-900 mb-4">Ingest website content</h3>
+        <form onSubmit={handleIngest} className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Website URL</label>
+            <input
+              type="url"
+              value={url}
+              onChange={(e) => setUrl(e.target.value)}
+              placeholder="https://example.com"
+              required
+              className="w-full px-3 py-2 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Max pages to crawl</label>
+            <input
+              type="number"
+              value={maxPages}
+              onChange={(e) => setMaxPages(parseInt(e.target.value) || 50)}
+              min={1}
+              max={200}
+              className="w-32 px-3 py-2 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+          <button
+            type="submit"
+            disabled={loading}
+            className="px-4 py-2 bg-gray-900 text-white rounded-lg text-sm font-medium hover:bg-gray-800 disabled:opacity-50"
+          >
+            {loading ? "Scraping... (this may take a minute)" : "Start ingestion"}
+          </button>
+        </form>
+
+        {result && (
+          <div className={`mt-4 p-4 rounded-lg border ${result.error ? "bg-red-50 border-red-200" : "bg-green-50 border-green-200"}`}>
+            {result.error ? (
+              <p className="text-sm text-red-700">{result.error}</p>
+            ) : (
+              <div className="text-sm text-green-700">
+                <p>Scraped {result.pages_scraped} pages, stored {result.chunks_stored} chunks.</p>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// --- Widget Config Tab ---
+function WidgetConfigTab({ tenant, onRefresh }: { tenant: Tenant; onRefresh: () => void }) {
+  const cfg = tenant.widget_config as Record<string, string | boolean | number>;
+  const [saving, setSaving] = useState(false);
+
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setSaving(true);
+    const fd = new FormData(e.currentTarget);
+    const widgetConfig: Record<string, unknown> = {
+      primary_color: fd.get("primary_color"),
+      accent_color: fd.get("accent_color"),
+      background_color: fd.get("background_color"),
+      text_color: fd.get("text_color"),
+      theme: fd.get("theme"),
+      position: fd.get("position"),
+      border_radius: fd.get("border_radius"),
+      launcher_icon: fd.get("launcher_icon"),
+      launcher_icon_url: fd.get("launcher_icon_url") || null,
+      bot_name: fd.get("bot_name"),
+      bot_avatar_url: fd.get("bot_avatar_url") || null,
+      header_text: fd.get("header_text"),
+      welcome_message: fd.get("welcome_message"),
+      placeholder_text: fd.get("placeholder_text"),
+      show_powered_by: fd.get("show_powered_by") === "on",
+      auto_open: fd.get("auto_open") === "on",
+      persist_conversations: fd.get("persist_conversations") === "on",
+      show_sources: fd.get("show_sources") === "on",
+      window_width: parseInt(fd.get("window_width") as string) || 380,
+      window_height: parseInt(fd.get("window_height") as string) || 540,
+      launcher_size: parseInt(fd.get("launcher_size") as string) || 60,
+      max_message_length: parseInt(fd.get("max_message_length") as string) || 500,
+    };
+    try {
+      await updateTenant(tenant.id, { widget_config: widgetConfig });
+      onRefresh();
+      alert("Widget config saved.");
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Save failed");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="bg-white rounded-xl border border-gray-200 p-6">
+      <h3 className="font-semibold text-gray-900 mb-4">Widget configuration</h3>
+      <form onSubmit={handleSubmit} className="space-y-6">
+        {/* Colors */}
+        <fieldset>
+          <legend className="text-sm font-medium text-gray-700 mb-3">Colors</legend>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <ColorInput label="Primary" name="primary_color" defaultValue={(cfg.primary_color as string) || "#2563eb"} />
+            <ColorInput label="Accent" name="accent_color" defaultValue={(cfg.accent_color as string) || "#1e40af"} />
+            <ColorInput label="Background" name="background_color" defaultValue={(cfg.background_color as string) || "#ffffff"} />
+            <ColorInput label="Text" name="text_color" defaultValue={(cfg.text_color as string) || "#1a1a1a"} />
+          </div>
+        </fieldset>
+
+        {/* Appearance */}
+        <fieldset>
+          <legend className="text-sm font-medium text-gray-700 mb-3">Appearance</legend>
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+            <SelectInput label="Theme" name="theme" defaultValue={(cfg.theme as string) || "light"} options={["light", "dark", "auto"]} />
+            <SelectInput label="Position" name="position" defaultValue={(cfg.position as string) || "bottom-right"} options={["bottom-right", "bottom-left", "top-right", "top-left"]} />
+            <SelectInput label="Border radius" name="border_radius" defaultValue={(cfg.border_radius as string) || "large"} options={["none", "small", "medium", "large"]} />
+            <SelectInput label="Launcher icon" name="launcher_icon" defaultValue={(cfg.launcher_icon as string) || "chat"} options={["chat", "question", "support", "custom"]} />
+            <Input label="Launcher icon URL" name="launcher_icon_url" defaultValue={(cfg.launcher_icon_url as string) || ""} placeholder="For custom icon" />
+            <Input label="Launcher size (px)" name="launcher_size" type="number" defaultValue={String(cfg.launcher_size || 60)} />
+          </div>
+        </fieldset>
+
+        {/* Window */}
+        <fieldset>
+          <legend className="text-sm font-medium text-gray-700 mb-3">Chat window</legend>
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+            <Input label="Width (px)" name="window_width" type="number" defaultValue={String(cfg.window_width || 380)} />
+            <Input label="Height (px)" name="window_height" type="number" defaultValue={String(cfg.window_height || 540)} />
+            <Input label="Max message length" name="max_message_length" type="number" defaultValue={String(cfg.max_message_length || 500)} />
+          </div>
+        </fieldset>
+
+        {/* Branding */}
+        <fieldset>
+          <legend className="text-sm font-medium text-gray-700 mb-3">Branding</legend>
+          <div className="grid grid-cols-2 gap-4">
+            <Input label="Bot name" name="bot_name" defaultValue={(cfg.bot_name as string) || "Assistant"} />
+            <Input label="Bot avatar URL" name="bot_avatar_url" defaultValue={(cfg.bot_avatar_url as string) || ""} placeholder="https://..." />
+            <Input label="Header text" name="header_text" defaultValue={(cfg.header_text as string) || "Chat with us"} />
+            <Input label="Placeholder text" name="placeholder_text" defaultValue={(cfg.placeholder_text as string) || "Type a message..."} />
+            <div className="col-span-2">
+              <Input label="Welcome message" name="welcome_message" defaultValue={(cfg.welcome_message as string) || ""} />
+            </div>
+          </div>
+        </fieldset>
+
+        {/* Toggles */}
+        <fieldset>
+          <legend className="text-sm font-medium text-gray-700 mb-3">Behavior</legend>
+          <div className="flex flex-wrap gap-6">
+            <Toggle label="Show 'Powered by'" name="show_powered_by" defaultChecked={cfg.show_powered_by !== false} />
+            <Toggle label="Auto-open" name="auto_open" defaultChecked={!!cfg.auto_open} />
+            <Toggle label="Persist conversations" name="persist_conversations" defaultChecked={cfg.persist_conversations !== false} />
+            <Toggle label="Show sources" name="show_sources" defaultChecked={!!cfg.show_sources} />
+          </div>
+        </fieldset>
+
+        <button type="submit" disabled={saving} className="px-4 py-2 bg-gray-900 text-white rounded-lg text-sm font-medium hover:bg-gray-800 disabled:opacity-50">
+          {saving ? "Saving..." : "Save widget config"}
+        </button>
+      </form>
+    </div>
+  );
+}
+
+// --- Conversations Tab ---
+function ConversationsTab({ tenantId }: { tenantId: string }) {
+  const [convos, setConvos] = useState<{ id: string; session_id: string; message_count: number; messages: { role: string; content: string }[]; updated_at: string }[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [expanded, setExpanded] = useState<string | null>(null);
+
+  useEffect(() => {
+    listConversations(tenantId, 1, 50)
+      .then((res) => setConvos(res.items))
+      .catch(console.error)
+      .finally(() => setLoading(false));
+  }, [tenantId]);
+
+  if (loading) return <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-gray-900 mx-auto mt-8" />;
+
+  return (
+    <div className="space-y-3">
+      {convos.length === 0 ? (
+        <p className="text-gray-500 text-sm">No conversations yet.</p>
+      ) : (
+        convos.map((c) => (
+          <div key={c.id} className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+            <button
+              onClick={() => setExpanded(expanded === c.id ? null : c.id)}
+              className="w-full px-5 py-3 flex items-center justify-between text-left hover:bg-gray-50"
+            >
+              <div>
+                <span className="text-sm font-medium text-gray-900">{c.message_count} messages</span>
+                <span className="text-xs text-gray-400 ml-3">Session: {c.session_id.slice(0, 8)}...</span>
+              </div>
+              <span className="text-xs text-gray-400">{new Date(c.updated_at).toLocaleString()}</span>
+            </button>
+            {expanded === c.id && (
+              <div className="px-5 pb-4 space-y-2 border-t border-gray-100 pt-3">
+                {c.messages.map((m, i) => (
+                  <div key={i} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
+                    <div className={`max-w-[80%] px-3 py-2 rounded-lg text-sm ${
+                      m.role === "user" ? "bg-blue-600 text-white" : "bg-gray-100 text-gray-800"
+                    }`}>
+                      {m.content}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        ))
+      )}
+    </div>
+  );
+}
+
+// --- Documents Tab ---
+function DocumentsTab({ tenantId }: { tenantId: string }) {
+  const [docs, setDocs] = useState<{ id: string; source_url: string; title: string; chunk_index: number; created_at: string }[]>([]);
+  const [total, setTotal] = useState(0);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    listDocuments(tenantId, 1, 100)
+      .then((res) => { setDocs(res.items); setTotal(res.total); })
+      .catch(console.error)
+      .finally(() => setLoading(false));
+  }, [tenantId]);
+
+  if (loading) return <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-gray-900 mx-auto mt-8" />;
+
+  // Group by source URL
+  const grouped: Record<string, typeof docs> = {};
+  docs.forEach((d) => {
+    if (!grouped[d.source_url]) grouped[d.source_url] = [];
+    grouped[d.source_url].push(d);
+  });
+
+  return (
+    <div className="space-y-4">
+      <p className="text-sm text-gray-500">{total} total chunks across {Object.keys(grouped).length} pages</p>
+      {Object.entries(grouped).map(([url, chunks]) => (
+        <div key={url} className="bg-white rounded-xl border border-gray-200 p-4">
+          <a href={url} target="_blank" rel="noopener noreferrer" className="text-sm font-medium text-blue-600 hover:text-blue-700 break-all">
+            {url}
+          </a>
+          <p className="text-xs text-gray-400 mt-1">{chunks.length} chunks / {chunks[0]?.title || "Untitled"}</p>
+        </div>
+      ))}
+      {docs.length === 0 && <p className="text-gray-500 text-sm">No documents ingested yet. Use the Ingestion tab to scrape a website.</p>}
+    </div>
+  );
+}
+
+// --- Shared components ---
+
+function Input({ label, ...props }: { label: string } & React.InputHTMLAttributes<HTMLInputElement>) {
+  return (
+    <div>
+      <label className="block text-xs font-medium text-gray-700 mb-1">{label}</label>
+      <input {...props} className="w-full px-3 py-2 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500" />
+    </div>
+  );
+}
+
+function SelectInput({ label, name, defaultValue, options }: { label: string; name: string; defaultValue: string; options: string[] }) {
+  return (
+    <div>
+      <label className="block text-xs font-medium text-gray-700 mb-1">{label}</label>
+      <select name={name} defaultValue={defaultValue} className="w-full px-3 py-2 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500">
+        {options.map((o) => <option key={o} value={o}>{o}</option>)}
+      </select>
+    </div>
+  );
+}
+
+function ColorInput({ label, name, defaultValue }: { label: string; name: string; defaultValue: string }) {
+  return (
+    <div>
+      <label className="block text-xs font-medium text-gray-700 mb-1">{label}</label>
+      <div className="flex items-center gap-2">
+        <input type="color" name={name} defaultValue={defaultValue} className="w-8 h-8 rounded border cursor-pointer" />
+        <input type="text" defaultValue={defaultValue} className="flex-1 px-3 py-2 border rounded-lg text-xs font-mono outline-none" readOnly />
+      </div>
+    </div>
+  );
+}
+
+function Toggle({ label, name, defaultChecked }: { label: string; name: string; defaultChecked: boolean }) {
+  return (
+    <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+      <input type="checkbox" name={name} defaultChecked={defaultChecked} className="rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
+      {label}
+    </label>
+  );
+}
+
+function MiniStat({ label, value }: { label: string; value: number | string }) {
+  return (
+    <div className="bg-white rounded-lg border border-gray-200 p-4">
+      <p className="text-xs text-gray-500">{label}</p>
+      <p className="text-xl font-bold text-gray-900 mt-1">{typeof value === "number" ? value.toLocaleString() : value}</p>
+    </div>
+  );
+}
+
+function LoadingPage() {
+  return (
+    <div className="flex min-h-screen">
+      <Sidebar />
+      <div className="flex-1 flex items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900" />
+      </div>
+    </div>
+  );
+}
+
+function NotFoundPage() {
+  return (
+    <div className="flex min-h-screen">
+      <Sidebar />
+      <div className="flex-1 flex items-center justify-center">
+        <p className="text-gray-500">Tenant not found.</p>
+      </div>
+    </div>
+  );
+}
