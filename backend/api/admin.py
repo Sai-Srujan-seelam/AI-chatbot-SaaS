@@ -11,13 +11,14 @@ from backend.models.document import Document
 from backend.models.conversation import Conversation
 from backend.security.auth import generate_api_key, hash_api_key
 from backend.security.admin_auth import require_admin
-from backend.ingestion.embedder import ingest_website
+from backend.ingestion.embedder import ingest_website, ingest_text
 from backend.api.schemas import (
     TenantCreate,
     TenantResponse,
     TenantCreateResponse,
     TenantUpdate,
     IngestRequest,
+    IngestTextRequest,
     IngestResponse,
     TenantStats,
     WidgetConfig,
@@ -188,6 +189,34 @@ async def ingest_content(
     return IngestResponse(
         status="completed",
         pages_scraped=stats.get("pages_scraped", 0),
+        chunks_stored=stats.get("chunks_stored", 0),
+        sources=stats.get("sources", []),
+        error=stats.get("error"),
+    )
+
+
+@router.post("/tenants/{tenant_id}/ingest-text", response_model=IngestResponse)
+async def ingest_text_content(
+    tenant_id: UUID,
+    payload: IngestTextRequest,
+    _admin=Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Ingest raw text directly -- for FAQs, docs, or anything not on a website."""
+    await _get_tenant_or_404(db, tenant_id)
+
+    stats = await ingest_text(
+        db=db,
+        tenant_id=tenant_id,
+        text=payload.text,
+        title=payload.title,
+        source_label=payload.source_label,
+        clear_existing=payload.clear_existing,
+    )
+
+    return IngestResponse(
+        status="completed",
+        pages_scraped=0,
         chunks_stored=stats.get("chunks_stored", 0),
         sources=stats.get("sources", []),
         error=stats.get("error"),

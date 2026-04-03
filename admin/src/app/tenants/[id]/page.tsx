@@ -6,7 +6,7 @@ import Link from "next/link";
 import Sidebar from "@/components/sidebar";
 import {
   getTenant, getTenantStats, updateTenant, deleteTenant, rotateApiKey,
-  ingestWebsite, listDocuments, listConversations,
+  ingestWebsite, ingestText, listDocuments, listConversations,
   type Tenant, type TenantStats,
 } from "@/lib/api";
 
@@ -299,6 +299,89 @@ function IngestTab({ tenantId, onRefresh }: { tenantId: string; onRefresh: () =>
           </div>
         )}
       </div>
+
+      <TextIngestForm tenantId={tenantId} onRefresh={onRefresh} />
+    </div>
+  );
+}
+
+function TextIngestForm({ tenantId, onRefresh }: { tenantId: string; onRefresh: () => void }) {
+  const [text, setText] = useState("");
+  const [title, setTitle] = useState("");
+  const [sourceLabel, setSourceLabel] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [result, setResult] = useState<{ chunks_stored: number; error: string | null } | null>(null);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setLoading(true);
+    setResult(null);
+    try {
+      const res = await ingestText(tenantId, text, title || "Manual entry", sourceLabel || "manual");
+      setResult(res);
+      if (!res.error) setText("");
+      onRefresh();
+    } catch (err) {
+      setResult({ chunks_stored: 0, error: err instanceof Error ? err.message : "Ingestion failed" });
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="bg-white rounded-xl border border-gray-200 p-6">
+      <h3 className="font-semibold text-gray-900 mb-1">Paste text directly</h3>
+      <p className="text-sm text-gray-500 mb-4">For FAQs, product info, policies, or anything not on a website.</p>
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Content</label>
+          <textarea
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            required
+            rows={8}
+            placeholder={"Paste your text here. For example:\n\nOur hours are Mon-Fri 9am-5pm.\nWe offer free consultations.\nPricing starts at $99/month..."}
+            className="w-full px-3 py-2 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500 font-mono"
+          />
+        </div>
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Title (optional)</label>
+            <input
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="e.g. FAQ, Pricing, Hours"
+              className="w-full px-3 py-2 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Source label (optional)</label>
+            <input
+              value={sourceLabel}
+              onChange={(e) => setSourceLabel(e.target.value)}
+              placeholder="e.g. faq, pricing-page"
+              className="w-full px-3 py-2 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+        </div>
+        <button
+          type="submit"
+          disabled={loading || !text.trim()}
+          className="px-4 py-2 bg-gray-900 text-white rounded-lg text-sm font-medium hover:bg-gray-800 disabled:opacity-50"
+        >
+          {loading ? "Processing..." : "Ingest text"}
+        </button>
+      </form>
+
+      {result && (
+        <div className={`mt-4 p-4 rounded-lg border ${result.error ? "bg-red-50 border-red-200" : "bg-green-50 border-green-200"}`}>
+          {result.error ? (
+            <p className="text-sm text-red-700">{result.error}</p>
+          ) : (
+            <p className="text-sm text-green-700">Stored {result.chunks_stored} chunks from text.</p>
+          )}
+        </div>
+      )}
     </div>
   );
 }

@@ -137,6 +137,18 @@ export const ingestWebsite = (tenantId: string, url: string, maxPages = 50) =>
     body: JSON.stringify({ url, max_pages: maxPages, clear_existing: true }),
   });
 
+export const ingestText = (tenantId: string, text: string, title = "Manual entry", sourceLabel = "manual", clearExisting = false) =>
+  request<{
+    status: string;
+    pages_scraped: number;
+    chunks_stored: number;
+    sources: string[];
+    error: string | null;
+  }>(`/api/v1/admin/tenants/${tenantId}/ingest-text`, {
+    method: "POST",
+    body: JSON.stringify({ text, title, source_label: sourceLabel, clear_existing: clearExisting }),
+  });
+
 // --- Documents ---
 export const listDocuments = (tenantId: string, page = 1, pageSize = 50) =>
   request<PaginatedResponse<{

@@ -131,6 +131,14 @@ class IngestRequest(BaseModel):
     clear_existing: bool = True
 
 
+class IngestTextRequest(BaseModel):
+    """Ingest raw text directly instead of scraping a URL."""
+    text: str = Field(..., min_length=1, max_length=500000)
+    title: str = Field(default="Manual entry", max_length=512)
+    source_label: str = Field(default="manual", max_length=255)
+    clear_existing: bool = False
+
+
 class IngestResponse(BaseModel):
     status: str
     pages_scraped: int

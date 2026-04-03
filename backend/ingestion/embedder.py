@@ -113,3 +113,54 @@ async def ingest_website(
     }
     logger.info(f"Ingestion complete: {stats}")
     return stats
+
+
+async def ingest_text(
+    db: AsyncSession,
+    tenant_id: uuid.UUID,
+    text: str,
+    title: str = "Manual entry",
+    source_label: str = "manual",
+    clear_existing: bool = False,
+) -> dict:
+    """
+    Ingest raw text directly: chunk -> embed -> store.
+    Useful for FAQs, product descriptions, or any content not on a website.
+    """
+    logger.info(f"Ingesting {len(text)} chars of text for tenant {tenant_id}")
+
+    chunks = chunk_text(text)
+    if not chunks:
+        return {"pages_scraped": 0, "chunks_stored": 0, "error": "No chunks generated from text"}
+
+    logger.info(f"Generating embeddings for {len(chunks)} chunks")
+    embeddings = await embed_texts(chunks)
+
+    if clear_existing:
+        await db.execute(
+            delete(Document).where(Document.tenant_id == tenant_id)
+        )
+
+    documents = []
+    for idx, (chunk, embedding) in enumerate(zip(chunks, embeddings)):
+        doc = Document(
+            tenant_id=tenant_id,
+            source_url=source_label,
+            title=title,
+            content=chunk,
+            embedding=embedding,
+            chunk_index=idx,
+            metadata_={"char_count": len(chunk), "source_type": "manual"},
+        )
+        documents.append(doc)
+
+    db.add_all(documents)
+    await db.commit()
+
+    stats = {
+        "pages_scraped": 0,
+        "chunks_stored": len(documents),
+        "sources": [source_label],
+    }
+    logger.info(f"Text ingestion complete: {stats}")
+    return stats
