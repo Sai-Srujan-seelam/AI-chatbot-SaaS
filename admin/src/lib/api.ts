@@ -57,6 +57,15 @@ async function request<T>(
 // --- Health ---
 export const health = () => request<{ status: string; version: string; database: string }>("/health");
 
+// --- Auth check (hits a protected endpoint to verify token, no redirect on failure) ---
+export async function verifyToken(): Promise<void> {
+  const token = getToken();
+  const res = await fetch(`${API_BASE}/api/v1/admin/tenants?page=1&page_size=1`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) throw new Error("Invalid token");
+}
+
 // --- Tenants ---
 export interface Tenant {
   id: string;

@@ -10,7 +10,6 @@ from backend.ingestion.chunker import chunk_text
 logger = logging.getLogger(__name__)
 settings = get_settings()
 
-# Lazy-loaded embedding client
 _voyage_client = None
 
 
@@ -26,7 +25,6 @@ def _get_voyage_client():
 async def embed_texts(texts: list[str]) -> list[list[float]]:
     """Generate embeddings for a batch of texts using Voyage AI."""
     client = _get_voyage_client()
-    # Voyage AI supports batches up to 128 texts
     all_embeddings = []
     batch_size = 64
 

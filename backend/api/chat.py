@@ -38,17 +38,18 @@ async def get_relevant_chunks(
     """Vector similarity search against tenant's documents."""
     query_embedding = await embed_query(query)
 
+    embedding_str = str(query_embedding)
     result = await db.execute(
         text("""
             SELECT content, source_url, title,
-                   1 - (embedding <=> :embedding::vector) as similarity
+                   1 - (embedding <=> cast(:embedding as vector)) as similarity
             FROM documents
-            WHERE tenant_id = :tenant_id
-            ORDER BY embedding <=> :embedding::vector
+            WHERE tenant_id = cast(:tenant_id as uuid)
+            ORDER BY embedding <=> cast(:embedding as vector)
             LIMIT :top_k
         """),
         {
-            "embedding": str(query_embedding),
+            "embedding": embedding_str,
             "tenant_id": str(tenant_id),
             "top_k": top_k,
         },

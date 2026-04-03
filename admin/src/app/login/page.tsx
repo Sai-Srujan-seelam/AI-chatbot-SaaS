@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { setToken, health } from "@/lib/api";
+import { setToken, verifyToken } from "@/lib/api";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -16,10 +16,10 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      // Save token first so the health check uses it
+      // Save token first so the verify call uses it
       setToken(token.trim());
-      // Verify by hitting a protected endpoint
-      await health();
+      // Hit a protected endpoint to confirm the token works
+      await verifyToken();
       router.replace("/");
     } catch {
       setError("Invalid token or server not reachable.");

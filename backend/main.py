@@ -18,12 +18,33 @@ settings = get_settings()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup: create tables (dev only — use Alembic in production)
+    from sqlalchemy import text as sa_text
+    from backend.ingestion.dimension import get_embedding_dimension
+
+    dim = get_embedding_dimension()
+    logger.info(f"Embedding dimension: {dim} (model: {settings.embedding_model})")
+
     logger.info("Creating database tables...")
     async with engine.begin() as conn:
-        await conn.execute(
-            __import__("sqlalchemy").text("CREATE EXTENSION IF NOT EXISTS vector")
-        )
+        await conn.execute(sa_text("CREATE EXTENSION IF NOT EXISTS vector"))
+
+        # Auto-migrate: if documents table exists but vector column has wrong dimension, fix it
+        row = await conn.execute(sa_text(
+            "SELECT atttypmod FROM pg_attribute "
+            "WHERE attrelid = 'documents'::regclass AND attname = 'embedding'"
+        ))
+        existing = row.scalar_one_or_none()
+        if existing is not None and existing != dim:
+            logger.warning(
+                f"Embedding column dimension mismatch: DB has {existing}, model needs {dim}. "
+                f"Migrating column (existing embeddings will be dropped)..."
+            )
+            await conn.execute(sa_text("DELETE FROM documents"))
+            await conn.execute(sa_text(
+                f"ALTER TABLE documents ALTER COLUMN embedding TYPE vector({dim})"
+            ))
+            logger.info(f"Migrated embedding column to vector({dim})")
+
         await conn.run_sync(Base.metadata.create_all)
     logger.info("Database ready.")
     yield

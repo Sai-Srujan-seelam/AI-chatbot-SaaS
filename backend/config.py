@@ -22,7 +22,7 @@ class Settings(BaseSettings):
     voyage_api_key: str = ""
     openai_api_key: str = ""
     embedding_model: str = "voyage-3-lite"
-    embedding_dimension: int = 1024  # voyage-3-lite dimension
+    embedding_dimension: int = 0  # 0 = auto-detect from model on startup
 
     # Widget
     widget_cdn_url: str = "http://localhost:8000/static"
@@ -43,7 +43,28 @@ class Settings(BaseSettings):
     scraper_max_pages: int = 50
     scraper_timeout: int = 15
 
-    model_config = {"env_file": ".env", "extra": "ignore"}
+    model_config = {"env_file": ".env", "env_file_encoding": "utf-8", "extra": "ignore"}
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        # Shell may export empty ANTHROPIC_API_KEY (e.g. from Claude Code).
+        # If the loaded value is empty, re-read directly from .env.
+        if not self.anthropic_api_key:
+            self._load_from_env_file("anthropic_api_key", "ANTHROPIC_API_KEY")
+
+    def _load_from_env_file(self, attr: str, env_key: str):
+        """Fallback: read a key directly from .env when shell env is empty."""
+        try:
+            with open(".env") as f:
+                for line in f:
+                    line = line.strip()
+                    if line.startswith(f"{env_key}=") and not line.startswith("#"):
+                        value = line.split("=", 1)[1].strip()
+                        if value:
+                            object.__setattr__(self, attr, value)
+                        break
+        except FileNotFoundError:
+            pass
 
 
 @lru_cache()
