@@ -53,6 +53,15 @@ class WidgetConfig(BaseModel):
     show_sources: bool = False
     max_message_length: int = Field(default=500, ge=100, le=2000)
 
+    # Lead capture / CTA
+    enable_lead_capture: bool = True
+    lead_cta_text: str = "Book a Free Demo"
+    lead_form_title: str = "Get Your Free Demo"
+    lead_form_subtitle: str = "Fill in your details and we'll get back to you shortly."
+    lead_form_fields: list[str] = ["name", "email", "phone", "message"]  # which fields to show
+    lead_success_message: str = "Thanks! We'll be in touch soon."
+    suggested_questions: list[str] = []  # e.g. ["What services do you offer?", "What are your hours?"]
+
     @field_validator("primary_color", "accent_color", "background_color", "text_color")
     @classmethod
     def check_hex_color(cls, v: str) -> str:
@@ -192,6 +201,14 @@ class WidgetConfigResponse(BaseModel):
     persist_conversations: bool
     show_sources: bool
     max_message_length: int
+    # Lead capture
+    enable_lead_capture: bool
+    lead_cta_text: str
+    lead_form_title: str
+    lead_form_subtitle: str
+    lead_form_fields: list[str]
+    lead_success_message: str
+    suggested_questions: list[str]
 
 
 # --- Pagination ---
@@ -202,6 +219,23 @@ class PaginatedResponse(BaseModel):
     page: int
     page_size: int
     pages: int
+
+
+# --- Lead Capture ---
+
+class LeadCaptureRequest(BaseModel):
+    name: str = Field(..., min_length=1, max_length=255)
+    email: str = Field(..., min_length=3, max_length=255)
+    phone: str | None = Field(default=None, max_length=50)
+    company: str | None = Field(default=None, max_length=255)
+    message: str | None = Field(default=None, max_length=2000)
+    lead_type: Literal["demo", "booking", "contact"] = "demo"
+    session_id: str | None = Field(default=None, max_length=64)
+
+
+class LeadCaptureResponse(BaseModel):
+    success: bool
+    message: str
 
 
 # --- Error ---

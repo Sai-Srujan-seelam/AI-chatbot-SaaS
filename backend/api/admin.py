@@ -1,17 +1,21 @@
 import logging
 import math
+import os
+import uuid as uuid_mod
 from datetime import datetime, timezone
 from uuid import UUID
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from backend.database import get_db
 from backend.models.tenant import Tenant
 from backend.models.document import Document
 from backend.models.conversation import Conversation
+from backend.models.lead import Lead
 from backend.security.auth import generate_api_key, hash_api_key
 from backend.security.admin_auth import require_admin
 from backend.ingestion.embedder import ingest_website, ingest_text
+from backend.config import get_settings
 from backend.api.schemas import (
     TenantCreate,
     TenantResponse,
@@ -404,7 +408,131 @@ async def get_widget_config(
         persist_conversations=cfg.persist_conversations,
         show_sources=cfg.show_sources,
         max_message_length=cfg.max_message_length,
+        enable_lead_capture=cfg.enable_lead_capture,
+        lead_cta_text=cfg.lead_cta_text,
+        lead_form_title=cfg.lead_form_title,
+        lead_form_subtitle=cfg.lead_form_subtitle,
+        lead_form_fields=cfg.lead_form_fields,
+        lead_success_message=cfg.lead_success_message,
+        suggested_questions=cfg.suggested_questions,
     )
+
+
+# --- Image Upload ---
+
+ALLOWED_IMAGE_TYPES = {"image/png", "image/jpeg", "image/gif", "image/webp", "image/svg+xml"}
+MAX_IMAGE_SIZE = 2 * 1024 * 1024  # 2 MB
+
+
+@router.post("/tenants/{tenant_id}/upload-image")
+async def upload_image(
+    tenant_id: UUID,
+    file: UploadFile = File(...),
+    _admin=Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Upload an image for bot avatar or launcher icon. Returns the public URL."""
+    await _get_tenant_or_404(db, tenant_id)
+
+    if file.content_type not in ALLOWED_IMAGE_TYPES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid file type: {file.content_type}. Allowed: png, jpg, gif, webp, svg.",
+        )
+
+    contents = await file.read()
+    if len(contents) > MAX_IMAGE_SIZE:
+        raise HTTPException(status_code=400, detail="File too large. Max 2 MB.")
+
+    ext = file.filename.rsplit(".", 1)[-1].lower() if file.filename and "." in file.filename else "png"
+    if ext not in ("png", "jpg", "jpeg", "gif", "webp", "svg"):
+        ext = "png"
+
+    filename = f"{tenant_id}_{uuid_mod.uuid4().hex[:8]}.{ext}"
+    upload_dir = os.path.join("static", "uploads")
+    os.makedirs(upload_dir, exist_ok=True)
+    filepath = os.path.join(upload_dir, filename)
+
+    with open(filepath, "wb") as f:
+        f.write(contents)
+
+    settings = get_settings()
+    base_url = settings.widget_cdn_url.rstrip("/").replace("/static", "")
+    image_url = f"{base_url}/static/uploads/{filename}"
+
+    logger.info(f"Uploaded image for tenant {tenant_id}: {filename}")
+    return {"url": image_url, "filename": filename}
+
+
+# --- Leads / Bookings ---
+
+
+@router.get("/tenants/{tenant_id}/leads")
+async def list_leads(
+    tenant_id: UUID,
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=20, ge=1, le=100),
+    _admin=Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """List captured leads and booking requests for a tenant."""
+    await _get_tenant_or_404(db, tenant_id)
+
+    count_result = await db.execute(
+        select(func.count()).select_from(Lead).where(Lead.tenant_id == tenant_id)
+    )
+    total = count_result.scalar() or 0
+
+    offset = (page - 1) * page_size
+    result = await db.execute(
+        select(Lead)
+        .where(Lead.tenant_id == tenant_id)
+        .order_by(Lead.created_at.desc())
+        .offset(offset)
+        .limit(page_size)
+    )
+    leads = [
+        {
+            "id": str(l.id),
+            "name": l.name,
+            "email": l.email,
+            "phone": l.phone,
+            "company": l.company,
+            "message": l.message,
+            "lead_type": l.lead_type,
+            "status": l.status,
+            "session_id": l.session_id,
+            "created_at": l.created_at.isoformat(),
+        }
+        for l in result.scalars().all()
+    ]
+
+    return {
+        "items": leads,
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+        "pages": math.ceil(total / page_size) if total > 0 else 0,
+    }
+
+
+@router.patch("/leads/{lead_id}")
+async def update_lead_status(
+    lead_id: UUID,
+    payload: dict,
+    _admin=Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Update a lead's status (new, contacted, converted, closed)."""
+    result = await db.execute(select(Lead).where(Lead.id == lead_id))
+    lead = result.scalar_one_or_none()
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
+
+    if "status" in payload:
+        lead.status = payload["status"]
+    await db.commit()
+    return {"id": str(lead.id), "status": lead.status}
 
 
 # --- Helpers ---

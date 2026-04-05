@@ -177,6 +177,41 @@ export const listConversations = (tenantId: string, page = 1, pageSize = 20) =>
     updated_at: string;
   }>>(`/api/v1/admin/tenants/${tenantId}/conversations?page=${page}&page_size=${pageSize}`);
 
+// --- Leads ---
+export const listLeads = (tenantId: string, page = 1, pageSize = 50) =>
+  request<PaginatedResponse<{
+    id: string;
+    name: string;
+    email: string;
+    phone: string | null;
+    company: string | null;
+    message: string | null;
+    lead_type: string;
+    status: string;
+    session_id: string | null;
+    created_at: string;
+  }>>(`/api/v1/admin/tenants/${tenantId}/leads?page=${page}&page_size=${pageSize}`);
+
+// --- Image Upload ---
+export async function uploadImage(tenantId: string, file: File): Promise<{ url: string; filename: string }> {
+  const token = typeof window !== "undefined" ? localStorage.getItem("wc_admin_token") || "" : "";
+  const formData = new FormData();
+  formData.append("file", file);
+
+  const res = await fetch(`${API_BASE}/api/v1/admin/tenants/${tenantId}/upload-image`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: formData,
+  });
+
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.detail || `Upload failed: ${res.status}`);
+  }
+
+  return res.json();
+}
+
 // --- Stats ---
 export interface TenantStats {
   tenant_id: string;

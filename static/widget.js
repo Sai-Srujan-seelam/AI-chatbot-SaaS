@@ -58,6 +58,14 @@
     show_sources: false,
     max_message_length: 500,
     tenant_name: "",
+    // Lead capture
+    enable_lead_capture: true,
+    lead_cta_text: "Book a Free Demo",
+    lead_form_title: "Get Your Free Demo",
+    lead_form_subtitle: "Fill in your details and we'll get back to you shortly.",
+    lead_form_fields: ["name", "email", "phone", "message"],
+    lead_success_message: "Thanks! We'll be in touch soon.",
+    suggested_questions: [],
   };
 
   // --- Session management ---
@@ -150,11 +158,7 @@
     }
 
     // Bot avatar (sanitize URL and alt text)
-    let avatarHtml = "";
     const safeAvatarUrl = safeUrl(cfg.bot_avatar_url);
-    if (safeAvatarUrl) {
-      avatarHtml = '<img class="wc-avatar" src="' + escapeHtml(safeAvatarUrl) + '" alt="' + escapeHtml(cfg.bot_name) + '" />';
-    }
 
     // --- Shadow DOM ---
     const host = document.createElement("div");
@@ -217,7 +221,7 @@
         }
 
         .wc-header {
-          padding: 16px 20px;
+          padding: 12px 16px;
           background: ${cfg.primary_color};
           color: #fff;
           font-weight: 600;
@@ -225,7 +229,7 @@
           display: flex;
           align-items: center;
           justify-content: space-between;
-          gap: 10px;
+          gap: 8px;
           flex-shrink: 0;
         }
         .wc-header-left {
@@ -240,17 +244,27 @@
           object-fit: cover;
           border: 2px solid rgba(255,255,255,0.3);
         }
-        .wc-header-close {
+        .wc-header-actions {
+          display: flex;
+          align-items: center;
+          gap: 4px;
+        }
+        .wc-header-btn {
           background: none;
           border: none;
           color: #fff;
           cursor: pointer;
-          font-size: 22px;
-          opacity: 0.8;
-          padding: 0 4px;
+          opacity: 0.75;
+          padding: 4px;
           line-height: 1;
+          border-radius: 4px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
         }
-        .wc-header-close:hover { opacity: 1; }
+        .wc-header-btn:hover { opacity: 1; background: rgba(255,255,255,0.15); }
+        .wc-header-btn svg { width: 18px; height: 18px; fill: #fff; }
+        .wc-header-close { font-size: 22px; }
 
         .wc-messages {
           flex: 1;
@@ -262,6 +276,129 @@
         .wc-messages::-webkit-scrollbar-thumb {
           background: ${isDark ? "#4b5563" : "#d1d5db"};
           border-radius: 4px;
+        }
+
+        /* Suggested questions & CTA */
+        .wc-suggestions {
+          display: flex;
+          flex-direction: column;
+          gap: 6px;
+          margin-top: 8px;
+          margin-bottom: 8px;
+        }
+        .wc-suggestion-btn {
+          background: ${isDark ? "#374151" : "#f3f4f6"};
+          color: ${isDark ? "#e5e7eb" : "#374151"};
+          border: 1px solid ${isDark ? "#4b5563" : "#e5e7eb"};
+          border-radius: 10px;
+          padding: 8px 14px;
+          font-size: 13px;
+          cursor: pointer;
+          text-align: left;
+          font-family: inherit;
+          transition: background 0.15s, border-color 0.15s;
+        }
+        .wc-suggestion-btn:hover {
+          background: ${isDark ? "#4b5563" : "#e5e7eb"};
+          border-color: ${cfg.primary_color};
+        }
+        .wc-cta-btn {
+          background: ${cfg.primary_color};
+          color: #fff;
+          border: none;
+          border-radius: 10px;
+          padding: 10px 14px;
+          font-size: 13px;
+          font-weight: 600;
+          cursor: pointer;
+          text-align: center;
+          font-family: inherit;
+          transition: opacity 0.15s;
+        }
+        .wc-cta-btn:hover { opacity: 0.9; }
+
+        /* Lead capture form overlay */
+        .wc-lead-form {
+          display: none;
+          flex-direction: column;
+          padding: 20px;
+          gap: 12px;
+          overflow-y: auto;
+          flex: 1;
+        }
+        .wc-lead-form.active { display: flex; }
+        .wc-lead-form h3 {
+          font-size: 17px;
+          font-weight: 700;
+          color: ${textColor};
+          margin: 0;
+        }
+        .wc-lead-form p {
+          font-size: 13px;
+          color: ${isDark ? "#9ca3af" : "#6b7280"};
+          margin: 0;
+          line-height: 1.5;
+        }
+        .wc-lead-input {
+          border: 1px solid ${inputBorder};
+          border-radius: 8px;
+          padding: 10px 12px;
+          font-size: 14px;
+          font-family: inherit;
+          outline: none;
+          background: ${inputBg};
+          color: ${textColor};
+          transition: border-color 0.2s;
+        }
+        .wc-lead-input:focus { border-color: ${cfg.primary_color}; }
+        .wc-lead-input::placeholder { color: ${isDark ? "#6b7280" : "#9ca3af"}; }
+        .wc-lead-textarea {
+          border: 1px solid ${inputBorder};
+          border-radius: 8px;
+          padding: 10px 12px;
+          font-size: 14px;
+          font-family: inherit;
+          outline: none;
+          background: ${inputBg};
+          color: ${textColor};
+          resize: vertical;
+          min-height: 60px;
+          transition: border-color 0.2s;
+        }
+        .wc-lead-textarea:focus { border-color: ${cfg.primary_color}; }
+        .wc-lead-textarea::placeholder { color: ${isDark ? "#6b7280" : "#9ca3af"}; }
+        .wc-lead-submit {
+          background: ${cfg.primary_color};
+          color: #fff;
+          border: none;
+          border-radius: 8px;
+          padding: 11px;
+          font-size: 14px;
+          font-weight: 600;
+          cursor: pointer;
+          font-family: inherit;
+          transition: opacity 0.2s;
+        }
+        .wc-lead-submit:hover { opacity: 0.9; }
+        .wc-lead-submit:disabled { opacity: 0.5; cursor: not-allowed; }
+        .wc-lead-back {
+          background: none;
+          border: none;
+          color: ${isDark ? "#9ca3af" : "#6b7280"};
+          cursor: pointer;
+          font-size: 13px;
+          font-family: inherit;
+          text-decoration: underline;
+          padding: 0;
+          align-self: center;
+        }
+        .wc-lead-success {
+          text-align: center;
+          padding: 24px 16px;
+        }
+        .wc-lead-success-icon {
+          font-size: 48px;
+          margin-bottom: 12px;
         }
 
         .wc-msg-row {
@@ -400,9 +537,15 @@
             ${safeAvatarUrl ? '<img class="wc-header-avatar" src="' + escapeHtml(safeAvatarUrl) + '" alt="" />' : ""}
             <span>${escapeHtml(cfg.header_text)}</span>
           </div>
-          <button class="wc-header-close" aria-label="Close chat">&times;</button>
+          <div class="wc-header-actions">
+            <button class="wc-header-btn wc-clear-btn" aria-label="Clear chat" title="Clear chat">
+              <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
+            </button>
+            <button class="wc-header-btn wc-header-close" aria-label="Close chat">&times;</button>
+          </div>
         </div>
         <div class="wc-messages" role="log" aria-live="polite"></div>
+        <div class="wc-lead-form"></div>
         <div class="wc-input-area">
           <input class="wc-input" placeholder="${escapeHtml(cfg.placeholder_text)}" maxlength="${cfg.max_message_length}" />
           <button class="wc-send">Send</button>
@@ -417,14 +560,172 @@
     const launcher = shadow.querySelector(".wc-launcher");
     const chatWindow = shadow.querySelector(".wc-window");
     const closeBtn = shadow.querySelector(".wc-header-close");
+    const clearBtn = shadow.querySelector(".wc-clear-btn");
     const input = shadow.querySelector(".wc-input");
     const sendBtn = shadow.querySelector(".wc-send");
     const messagesEl = shadow.querySelector(".wc-messages");
+    const leadFormEl = shadow.querySelector(".wc-lead-form");
+    const inputAreaEl = shadow.querySelector(".wc-input-area");
 
     // --- Restore persisted messages ---
     const savedMessages = loadMessages();
     if (savedMessages.length > 0) {
       savedMessages.forEach(function (m) { appendMessage(m.text, m.role, m.sources, true); });
+    }
+
+    // --- Show welcome + suggestions + CTA ---
+    function showWelcome() {
+      appendMessage(cfg.welcome_message, "bot");
+
+      var hasSuggestions = cfg.suggested_questions && cfg.suggested_questions.length > 0;
+      var hasCta = cfg.enable_lead_capture;
+      if (!hasSuggestions && !hasCta) return;
+
+      var suggestionsDiv = document.createElement("div");
+      suggestionsDiv.className = "wc-suggestions";
+
+      // Suggested questions as clickable buttons
+      if (hasSuggestions) {
+        cfg.suggested_questions.forEach(function (q) {
+          var btn = document.createElement("button");
+          btn.className = "wc-suggestion-btn";
+          btn.textContent = q;
+          btn.addEventListener("click", function () {
+            suggestionsDiv.remove();
+            sendMessage(q);
+          });
+          suggestionsDiv.appendChild(btn);
+        });
+      }
+
+      // CTA button (e.g. "Book a Free Demo")
+      if (hasCta) {
+        var ctaBtn = document.createElement("button");
+        ctaBtn.className = "wc-cta-btn";
+        ctaBtn.textContent = cfg.lead_cta_text;
+        ctaBtn.addEventListener("click", function () {
+          showLeadForm();
+        });
+        suggestionsDiv.appendChild(ctaBtn);
+      }
+
+      messagesEl.appendChild(suggestionsDiv);
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+    }
+
+    // --- Lead capture form ---
+    function showLeadForm() {
+      messagesEl.style.display = "none";
+      inputAreaEl.style.display = "none";
+      leadFormEl.classList.add("active");
+
+      var fields = cfg.lead_form_fields || ["name", "email"];
+      var formHtml = "";
+
+      formHtml += '<h3>' + escapeHtml(cfg.lead_form_title) + '</h3>';
+      formHtml += '<p>' + escapeHtml(cfg.lead_form_subtitle) + '</p>';
+
+      if (fields.indexOf("name") !== -1) {
+        formHtml += '<input class="wc-lead-input" name="name" placeholder="Your name" required />';
+      }
+      if (fields.indexOf("email") !== -1) {
+        formHtml += '<input class="wc-lead-input" name="email" type="email" placeholder="Email address" required />';
+      }
+      if (fields.indexOf("phone") !== -1) {
+        formHtml += '<input class="wc-lead-input" name="phone" type="tel" placeholder="Phone number (optional)" />';
+      }
+      if (fields.indexOf("company") !== -1) {
+        formHtml += '<input class="wc-lead-input" name="company" placeholder="Company (optional)" />';
+      }
+      if (fields.indexOf("message") !== -1) {
+        formHtml += '<textarea class="wc-lead-textarea" name="message" placeholder="Tell us what you need..." rows="3"></textarea>';
+      }
+
+      formHtml += '<button class="wc-lead-submit" type="button">Submit</button>';
+      formHtml += '<button class="wc-lead-back" type="button">Back to chat</button>';
+
+      leadFormEl.innerHTML = formHtml;
+
+      // Back button
+      leadFormEl.querySelector(".wc-lead-back").addEventListener("click", hideLeadForm);
+
+      // Submit handler
+      leadFormEl.querySelector(".wc-lead-submit").addEventListener("click", submitLeadForm);
+    }
+
+    function hideLeadForm() {
+      leadFormEl.classList.remove("active");
+      leadFormEl.innerHTML = "";
+      messagesEl.style.display = "";
+      inputAreaEl.style.display = "";
+      input.focus();
+    }
+
+    async function submitLeadForm() {
+      var submitBtn = leadFormEl.querySelector(".wc-lead-submit");
+      var nameInput = leadFormEl.querySelector('[name="name"]');
+      var emailInput = leadFormEl.querySelector('[name="email"]');
+      var phoneInput = leadFormEl.querySelector('[name="phone"]');
+      var companyInput = leadFormEl.querySelector('[name="company"]');
+      var messageInput = leadFormEl.querySelector('[name="message"]');
+
+      var name = nameInput ? nameInput.value.trim() : "";
+      var email = emailInput ? emailInput.value.trim() : "";
+      var phone = phoneInput ? phoneInput.value.trim() : "";
+      var company = companyInput ? companyInput.value.trim() : "";
+      var message = messageInput ? messageInput.value.trim() : "";
+
+      // Basic validation
+      if (!name) { if (nameInput) nameInput.focus(); return; }
+      if (!email || email.indexOf("@") === -1) { if (emailInput) emailInput.focus(); return; }
+
+      submitBtn.disabled = true;
+      submitBtn.textContent = "Submitting...";
+
+      try {
+        var resp = await fetch(API_URL + "/api/v1/capture-lead", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-Api-Key": API_KEY,
+          },
+          body: JSON.stringify({
+            name: name,
+            email: email,
+            phone: phone || null,
+            company: company || null,
+            message: message || null,
+            lead_type: "demo",
+            session_id: sessionId,
+          }),
+        });
+
+        if (!resp.ok) throw new Error("Submit failed");
+
+        // Show success
+        leadFormEl.innerHTML = '<div class="wc-lead-success">' +
+          '<div class="wc-lead-success-icon">&#10003;</div>' +
+          '<h3>' + escapeHtml(cfg.lead_success_message) + '</h3>' +
+          '<p style="margin-top:8px;font-size:13px;color:#6b7280;">We\'ll reach out to ' + escapeHtml(email) + ' shortly.</p>' +
+          '<button class="wc-lead-back" style="margin-top:16px;" type="button">Back to chat</button>' +
+          '</div>';
+        leadFormEl.querySelector(".wc-lead-back").addEventListener("click", function () {
+          hideLeadForm();
+          appendMessage("Thanks " + name + "! Your request has been submitted. Is there anything else I can help with?", "bot");
+        });
+      } catch (err) {
+        submitBtn.disabled = false;
+        submitBtn.textContent = "Submit";
+        console.error("[WonderChat] Lead submit error:", err);
+        // Show inline error
+        var existing = leadFormEl.querySelector(".wc-lead-error");
+        if (existing) existing.remove();
+        var errEl = document.createElement("p");
+        errEl.className = "wc-lead-error";
+        errEl.style.cssText = "color:#ef4444;font-size:13px;text-align:center;";
+        errEl.textContent = "Something went wrong. Please try again.";
+        submitBtn.parentNode.insertBefore(errEl, submitBtn.nextSibling);
+      }
     }
 
     // --- Interactions ---
@@ -434,13 +735,25 @@
       if (isOpen) {
         input.focus();
         if (messagesEl.children.length === 0) {
-          appendMessage(cfg.welcome_message, "bot");
+          showWelcome();
         }
       }
     }
 
     launcher.addEventListener("click", toggleChat);
     closeBtn.addEventListener("click", toggleChat);
+
+    // --- Clear chat ---
+    clearBtn.addEventListener("click", function () {
+      messagesEl.innerHTML = "";
+      localStorage.removeItem(getStorageKey());
+      // Reset session for a fresh conversation
+      var sessionKey = "wc_session_" + API_KEY.slice(0, 12);
+      sessionId = crypto.randomUUID();
+      sessionStorage.setItem(sessionKey, sessionId);
+      // Show welcome again
+      showWelcome();
+    });
 
     function appendMessage(text, role, sources, skipSave) {
       var row = document.createElement("div");
@@ -519,6 +832,10 @@
       text = (text || input.value).trim();
       if (!text || isLoading) return;
 
+      // Remove suggestions after first user message
+      var suggestions = messagesEl.querySelector(".wc-suggestions");
+      if (suggestions) suggestions.remove();
+
       appendMessage(text, "user");
       input.value = "";
       isLoading = true;
@@ -585,6 +902,7 @@
       sendMessage: function (text) { sendMessage(text); },
       isOpen: function () { return isOpen; },
       getSessionId: function () { return sessionId; },
+      showLeadForm: function () { showLeadForm(); },
       clearHistory: function () {
         messagesEl.innerHTML = "";
         localStorage.removeItem(getStorageKey());

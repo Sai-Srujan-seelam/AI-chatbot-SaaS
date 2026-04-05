@@ -43,3 +43,6 @@ Thumbs.db
 # Claude Code (local dev config)
 .claude/
 serve.sh
+
+# Uploaded images (tenant-specific, not committed)
+static/uploads/

@@ -14,9 +14,11 @@ from backend.security.guardrails import (
     check_injection_attempt,
     validate_response,
 )
+from backend.models.lead import Lead
 from backend.ingestion.embedder import embed_query
-from backend.api.schemas import ChatRequest, ChatResponse
+from backend.api.schemas import ChatRequest, ChatResponse, LeadCaptureRequest, LeadCaptureResponse
 from backend.config import get_settings
+from backend.services.email import send_lead_confirmation, send_lead_notification
 import anthropic
 
 logger = logging.getLogger(__name__)
@@ -206,4 +208,53 @@ Context:
         reply=assistant_msg,
         session_id=req.session_id,
         sources=list(source_urls),
+    )
+
+
+@router.post("/capture-lead", response_model=LeadCaptureResponse)
+async def capture_lead(
+    req: LeadCaptureRequest,
+    request: Request,
+    tenant: Tenant = Depends(authenticate_api_key),
+    db: AsyncSession = Depends(get_db),
+):
+    """Public endpoint for widget to submit lead/demo/booking forms."""
+    await rate_limit(request)
+
+    lead = Lead(
+        tenant_id=tenant.id,
+        name=req.name.strip(),
+        email=req.email.strip(),
+        phone=req.phone.strip() if req.phone else None,
+        company=req.company.strip() if req.company else None,
+        message=req.message.strip() if req.message else None,
+        lead_type=req.lead_type,
+        session_id=req.session_id,
+    )
+    db.add(lead)
+    await db.commit()
+
+    logger.info(f"Lead captured for tenant {tenant.name}: {req.email} ({req.lead_type})")
+
+    # Send confirmation email to the visitor and notification to the tenant
+    await send_lead_confirmation(
+        to_email=req.email,
+        visitor_name=req.name,
+        tenant_name=tenant.name,
+        lead_type=req.lead_type,
+    )
+    if tenant.contact_email:
+        await send_lead_notification(
+            to_email=tenant.contact_email,
+            visitor_name=req.name,
+            visitor_email=req.email,
+            visitor_phone=req.phone,
+            message=req.message,
+            tenant_name=tenant.name,
+            lead_type=req.lead_type,
+        )
+
+    return LeadCaptureResponse(
+        success=True,
+        message="Thanks! We'll be in touch soon.",
     )

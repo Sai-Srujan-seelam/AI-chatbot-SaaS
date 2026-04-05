@@ -6,7 +6,7 @@ import Link from "next/link";
 import Sidebar from "@/components/sidebar";
 import {
   getTenant, getTenantStats, updateTenant, deleteTenant, rotateApiKey,
-  ingestWebsite, ingestText, listDocuments, listConversations,
+  ingestWebsite, ingestText, listDocuments, listConversations, listLeads, uploadImage,
   type Tenant, type TenantStats,
 } from "@/lib/api";
 
@@ -18,7 +18,7 @@ export default function TenantDetailPage() {
   const [tenant, setTenant] = useState<Tenant | null>(null);
   const [stats, setStats] = useState<TenantStats | null>(null);
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState<"overview" | "ingest" | "widget" | "conversations" | "documents">("overview");
+  const [tab, setTab] = useState<"overview" | "ingest" | "widget" | "conversations" | "documents" | "leads">("overview");
 
   async function load() {
     try {
@@ -43,6 +43,7 @@ export default function TenantDetailPage() {
     { key: "widget", label: "Widget config" },
     { key: "conversations", label: "Conversations" },
     { key: "documents", label: "Documents" },
+    { key: "leads", label: "Leads" },
   ] as const;
 
   return (
@@ -105,6 +106,7 @@ export default function TenantDetailPage() {
         {tab === "widget" && <WidgetConfigTab tenant={tenant} onRefresh={load} />}
         {tab === "conversations" && <ConversationsTab tenantId={id} />}
         {tab === "documents" && <DocumentsTab tenantId={id} />}
+        {tab === "leads" && <LeadsTab tenantId={id} />}
       </main>
     </div>
   );
@@ -418,6 +420,12 @@ function WidgetConfigTab({ tenant, onRefresh }: { tenant: Tenant; onRefresh: () 
       window_height: parseInt(fd.get("window_height") as string) || 540,
       launcher_size: parseInt(fd.get("launcher_size") as string) || 60,
       max_message_length: parseInt(fd.get("max_message_length") as string) || 500,
+      enable_lead_capture: fd.get("enable_lead_capture") === "on",
+      lead_cta_text: fd.get("lead_cta_text") || "Book a Free Demo",
+      lead_form_title: fd.get("lead_form_title") || "Get Your Free Demo",
+      lead_form_subtitle: fd.get("lead_form_subtitle") || "",
+      lead_success_message: fd.get("lead_success_message") || "Thanks! We'll be in touch soon.",
+      suggested_questions: (fd.get("suggested_questions") as string || "").split("\n").map((s: string) => s.trim()).filter(Boolean),
     };
     try {
       await updateTenant(tenant.id, { widget_config: widgetConfig });
@@ -453,7 +461,6 @@ function WidgetConfigTab({ tenant, onRefresh }: { tenant: Tenant; onRefresh: () 
             <SelectInput label="Position" name="position" defaultValue={(cfg.position as string) || "bottom-right"} options={["bottom-right", "bottom-left", "top-right", "top-left"]} />
             <SelectInput label="Border radius" name="border_radius" defaultValue={(cfg.border_radius as string) || "large"} options={["none", "small", "medium", "large"]} />
             <SelectInput label="Launcher icon" name="launcher_icon" defaultValue={(cfg.launcher_icon as string) || "chat"} options={["chat", "question", "support", "custom"]} />
-            <Input label="Launcher icon URL" name="launcher_icon_url" defaultValue={(cfg.launcher_icon_url as string) || ""} placeholder="For custom icon" />
             <Input label="Launcher size (px)" name="launcher_size" type="number" defaultValue={String(cfg.launcher_size || 60)} />
           </div>
         </fieldset>
@@ -473,11 +480,34 @@ function WidgetConfigTab({ tenant, onRefresh }: { tenant: Tenant; onRefresh: () 
           <legend className="text-sm font-medium text-gray-700 mb-3">Branding</legend>
           <div className="grid grid-cols-2 gap-4">
             <Input label="Bot name" name="bot_name" defaultValue={(cfg.bot_name as string) || "Assistant"} />
-            <Input label="Bot avatar URL" name="bot_avatar_url" defaultValue={(cfg.bot_avatar_url as string) || ""} placeholder="https://..." />
+            <ImageUploadInput label="Bot avatar" name="bot_avatar_url" defaultValue={(cfg.bot_avatar_url as string) || ""} tenantId={tenant.id} />
             <Input label="Header text" name="header_text" defaultValue={(cfg.header_text as string) || "Chat with us"} />
             <Input label="Placeholder text" name="placeholder_text" defaultValue={(cfg.placeholder_text as string) || "Type a message..."} />
             <div className="col-span-2">
               <Input label="Welcome message" name="welcome_message" defaultValue={(cfg.welcome_message as string) || ""} />
+            </div>
+            <ImageUploadInput label="Custom launcher icon" name="launcher_icon_url" defaultValue={(cfg.launcher_icon_url as string) || ""} tenantId={tenant.id} />
+          </div>
+        </fieldset>
+
+        {/* Lead capture */}
+        <fieldset>
+          <legend className="text-sm font-medium text-gray-700 mb-3">Lead capture / CTA</legend>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="col-span-2">
+              <Toggle label="Enable lead capture (CTA button in chat)" name="enable_lead_capture" defaultChecked={cfg.enable_lead_capture !== false} />
+            </div>
+            <Input label="CTA button text" name="lead_cta_text" defaultValue={(cfg.lead_cta_text as string) || "Book a Free Demo"} />
+            <Input label="Form title" name="lead_form_title" defaultValue={(cfg.lead_form_title as string) || "Get Your Free Demo"} />
+            <div className="col-span-2">
+              <Input label="Form subtitle" name="lead_form_subtitle" defaultValue={(cfg.lead_form_subtitle as string) || "Fill in your details and we'll get back to you shortly."} />
+            </div>
+            <div className="col-span-2">
+              <Input label="Success message" name="lead_success_message" defaultValue={(cfg.lead_success_message as string) || "Thanks! We'll be in touch soon."} />
+            </div>
+            <div className="col-span-2">
+              <label className="block text-xs font-medium text-gray-700 mb-1">Suggested questions (one per line)</label>
+              <textarea name="suggested_questions" defaultValue={Array.isArray(cfg.suggested_questions) ? (cfg.suggested_questions as string[]).join("\n") : ""} rows={3} placeholder={"What services do you offer?\nWhat are your hours?\nHow much does it cost?"} className="w-full px-3 py-2 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500" />
             </div>
           </div>
         </fieldset>
@@ -587,6 +617,123 @@ function DocumentsTab({ tenantId }: { tenantId: string }) {
         </div>
       ))}
       {docs.length === 0 && <p className="text-gray-500 text-sm">No documents ingested yet. Use the Ingestion tab to scrape a website.</p>}
+    </div>
+  );
+}
+
+// --- Leads Tab ---
+function LeadsTab({ tenantId }: { tenantId: string }) {
+  const [leads, setLeads] = useState<{ id: string; name: string; email: string; phone: string | null; company: string | null; message: string | null; lead_type: string; status: string; created_at: string }[]>([]);
+  const [total, setTotal] = useState(0);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    listLeads(tenantId, 1, 50)
+      .then((res) => { setLeads(res.items); setTotal(res.total); })
+      .catch(console.error)
+      .finally(() => setLoading(false));
+  }, [tenantId]);
+
+  if (loading) return <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-gray-900 mx-auto mt-8" />;
+
+  return (
+    <div className="space-y-4">
+      <p className="text-sm text-gray-500">{total} total leads captured</p>
+      {leads.length === 0 ? (
+        <p className="text-gray-500 text-sm">No leads captured yet. Leads are collected when visitors fill out the demo/booking form in the chat widget.</p>
+      ) : (
+        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="bg-gray-50 border-b border-gray-200">
+                <th className="text-left px-4 py-3 font-medium text-gray-700">Name</th>
+                <th className="text-left px-4 py-3 font-medium text-gray-700">Email</th>
+                <th className="text-left px-4 py-3 font-medium text-gray-700">Phone</th>
+                <th className="text-left px-4 py-3 font-medium text-gray-700">Type</th>
+                <th className="text-left px-4 py-3 font-medium text-gray-700">Status</th>
+                <th className="text-left px-4 py-3 font-medium text-gray-700">Date</th>
+              </tr>
+            </thead>
+            <tbody>
+              {leads.map((l) => (
+                <tr key={l.id} className="border-b border-gray-100 hover:bg-gray-50">
+                  <td className="px-4 py-3 font-medium text-gray-900">{l.name}</td>
+                  <td className="px-4 py-3"><a href={`mailto:${l.email}`} className="text-blue-600 hover:text-blue-700">{l.email}</a></td>
+                  <td className="px-4 py-3 text-gray-600">{l.phone || "-"}</td>
+                  <td className="px-4 py-3">
+                    <span className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${
+                      l.lead_type === "demo" ? "bg-purple-100 text-purple-700" :
+                      l.lead_type === "booking" ? "bg-blue-100 text-blue-700" :
+                      "bg-gray-100 text-gray-700"
+                    }`}>{l.lead_type}</span>
+                  </td>
+                  <td className="px-4 py-3">
+                    <span className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${
+                      l.status === "new" ? "bg-green-100 text-green-700" :
+                      l.status === "contacted" ? "bg-yellow-100 text-yellow-700" :
+                      l.status === "converted" ? "bg-blue-100 text-blue-700" :
+                      "bg-gray-100 text-gray-700"
+                    }`}>{l.status}</span>
+                  </td>
+                  <td className="px-4 py-3 text-gray-500 text-xs">{new Date(l.created_at).toLocaleString()}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      {leads.length > 0 && leads.some(l => l.message) && (
+        <div className="space-y-3">
+          <h4 className="text-sm font-medium text-gray-700">Messages</h4>
+          {leads.filter(l => l.message).map(l => (
+            <div key={l.id + "-msg"} className="bg-white rounded-lg border border-gray-200 p-4">
+              <p className="text-sm font-medium text-gray-900">{l.name} <span className="text-gray-400 font-normal">({l.email})</span></p>
+              <p className="text-sm text-gray-600 mt-1">{l.message}</p>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// --- Image Upload Input ---
+function ImageUploadInput({ label, name, defaultValue, tenantId }: { label: string; name: string; defaultValue: string; tenantId: string }) {
+  const [url, setUrl] = useState(defaultValue);
+  const [uploading, setUploading] = useState(false);
+
+  async function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    try {
+      const result = await uploadImage(tenantId, file);
+      setUrl(result.url);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Upload failed");
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  return (
+    <div>
+      <label className="block text-xs font-medium text-gray-700 mb-1">{label}</label>
+      <div className="flex items-center gap-2">
+        {url && <img src={url} alt="" className="w-8 h-8 rounded-full object-cover border" />}
+        <input type="hidden" name={name} value={url} />
+        <input
+          type="text"
+          value={url}
+          onChange={(e) => setUrl(e.target.value)}
+          placeholder="URL or upload an image"
+          className="flex-1 px-3 py-2 border rounded-lg text-xs outline-none focus:ring-2 focus:ring-blue-500"
+        />
+        <label className={`px-3 py-2 text-xs font-medium rounded-lg cursor-pointer border ${uploading ? "opacity-50" : "hover:bg-gray-50"}`}>
+          {uploading ? "..." : "Upload"}
+          <input type="file" accept="image/*" onChange={handleUpload} className="hidden" />
+        </label>
+      </div>
     </div>
   );
 }

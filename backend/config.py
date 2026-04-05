@@ -43,6 +43,14 @@ class Settings(BaseSettings):
     scraper_max_pages: int = 50
     scraper_timeout: int = 15
 
+    # SMTP (for lead confirmations and notifications)
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_username: str = ""
+    smtp_password: str = ""
+    smtp_from_email: str = ""
+    smtp_use_tls: bool = True
+
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8", "extra": "ignore"}
 
     def __init__(self, **kwargs):
