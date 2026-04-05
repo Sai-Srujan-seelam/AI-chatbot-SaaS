@@ -1,4 +1,5 @@
 import logging
+from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, text
@@ -32,10 +33,17 @@ def get_claude():
     return _claude
 
 
+MIN_SIMILARITY = 0.3  # Ignore chunks below this cosine similarity
+
+
 async def get_relevant_chunks(
     db: AsyncSession, tenant_id, query: str, top_k: int = 5
 ) -> list[dict]:
-    """Vector similarity search against tenant's documents."""
+    """Vector similarity search against tenant's documents.
+
+    Filters out chunks below MIN_SIMILARITY to avoid feeding irrelevant
+    context to the LLM when the user asks something off-topic.
+    """
     query_embedding = await embed_query(query)
 
     embedding_str = str(query_embedding)
@@ -45,6 +53,7 @@ async def get_relevant_chunks(
                    1 - (embedding <=> cast(:embedding as vector)) as similarity
             FROM documents
             WHERE tenant_id = cast(:tenant_id as uuid)
+              AND 1 - (embedding <=> cast(:embedding as vector)) >= :min_sim
             ORDER BY embedding <=> cast(:embedding as vector)
             LIMIT :top_k
         """),
@@ -52,6 +61,7 @@ async def get_relevant_chunks(
             "embedding": embedding_str,
             "tenant_id": str(tenant_id),
             "top_k": top_k,
+            "min_sim": MIN_SIMILARITY,
         },
     )
     return [dict(row._mapping) for row in result.fetchall()]
@@ -99,6 +109,16 @@ async def chat(
     """Main chat endpoint -- the core of the product."""
     # Rate limit
     await rate_limit(request)
+
+    # Auto-reset monthly counter if billing period has rolled over
+    now = datetime.now(timezone.utc)
+    period_start = tenant.current_billing_period_start
+    if period_start:
+        # Reset if we've crossed into a new calendar month since the period started
+        if (now.year, now.month) > (period_start.year, period_start.month):
+            tenant.conversations_this_month = 0
+            tenant.current_billing_period_start = now
+            await db.flush()
 
     # Enforce monthly conversation limit
     if tenant.conversations_this_month >= tenant.max_conversations_per_month:

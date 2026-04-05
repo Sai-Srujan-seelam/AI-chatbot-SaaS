@@ -36,7 +36,7 @@ class Settings(BaseSettings):
 
     # RAG
     rag_top_k: int = 5
-    rag_max_tokens: int = 200
+    rag_max_tokens: int = 1024
     llm_model: str = "claude-sonnet-4-20250514"
 
     # Scraper

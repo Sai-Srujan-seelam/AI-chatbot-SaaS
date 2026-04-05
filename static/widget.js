@@ -447,14 +447,22 @@
 
       messagesEl.appendChild(row);
 
-      // Source links
+      // Source links (built with DOM APIs to prevent XSS from stored URLs)
       if (cfg.show_sources && sources && sources.length > 0) {
         var srcDiv = document.createElement("div");
         srcDiv.className = "wc-sources";
-        srcDiv.innerHTML = "Sources: " + sources.map(function (s) {
-          var display = s.replace(/^https?:\/\//, "").split("/").slice(0, 2).join("/");
-          return '<a href="' + s + '" target="_blank" rel="noopener">' + display + "</a>";
-        }).join(", ");
+        srcDiv.appendChild(document.createTextNode("Sources: "));
+        sources.forEach(function (s, i) {
+          // Only allow http/https URLs
+          if (!/^https?:\/\//i.test(s)) return;
+          if (i > 0) srcDiv.appendChild(document.createTextNode(", "));
+          var a = document.createElement("a");
+          a.href = s;
+          a.target = "_blank";
+          a.rel = "noopener";
+          a.textContent = s.replace(/^https?:\/\//, "").split("/").slice(0, 2).join("/");
+          srcDiv.appendChild(a);
+        });
         messagesEl.appendChild(srcDiv);
       }
 

@@ -1,5 +1,7 @@
+import asyncio
 import logging
 import uuid
+from functools import partial
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import delete
 from backend.config import get_settings
@@ -22,25 +24,43 @@ def _get_voyage_client():
     return _voyage_client
 
 
-async def embed_texts(texts: list[str]) -> list[list[float]]:
-    """Generate embeddings for a batch of texts using Voyage AI."""
+def _embed_sync(texts: list[str], input_type: str | None = None) -> list[list[float]]:
+    """Synchronous embedding call -- run this in a thread pool."""
     client = _get_voyage_client()
+    kwargs = {"model": settings.embedding_model}
+    if input_type:
+        kwargs["input_type"] = input_type
+    result = client.embed(texts, **kwargs)
+    return result.embeddings
+
+
+async def embed_texts(texts: list[str]) -> list[list[float]]:
+    """Generate embeddings for a batch of texts using Voyage AI.
+
+    Runs the synchronous Voyage SDK in a thread pool so we don't
+    block the async event loop.
+    """
+    loop = asyncio.get_running_loop()
     all_embeddings = []
     batch_size = 64
 
     for i in range(0, len(texts), batch_size):
         batch = texts[i : i + batch_size]
-        result = client.embed(batch, model=settings.embedding_model)
-        all_embeddings.extend(result.embeddings)
+        embeddings = await loop.run_in_executor(
+            None, partial(_embed_sync, batch)
+        )
+        all_embeddings.extend(embeddings)
 
     return all_embeddings
 
 
 async def embed_query(text: str) -> list[float]:
-    """Embed a single query text."""
-    client = _get_voyage_client()
-    result = client.embed([text], model=settings.embedding_model, input_type="query")
-    return result.embeddings[0]
+    """Embed a single query text (non-blocking)."""
+    loop = asyncio.get_running_loop()
+    embeddings = await loop.run_in_executor(
+        None, partial(_embed_sync, [text], "query")
+    )
+    return embeddings[0]
 
 
 async def ingest_website(

@@ -46,6 +46,18 @@ async def lifespan(app: FastAPI):
             logger.info(f"Migrated embedding column to vector({dim})")
 
         await conn.run_sync(Base.metadata.create_all)
+
+        # Create HNSW index on embedding column for fast vector search.
+        # Uses cosine distance (<=>). IF NOT EXISTS avoids errors on restart.
+        await conn.execute(sa_text(
+            "CREATE INDEX IF NOT EXISTS idx_documents_embedding_hnsw "
+            "ON documents USING hnsw (embedding vector_cosine_ops)"
+        ))
+        # Composite index for tenant-scoped queries
+        await conn.execute(sa_text(
+            "CREATE INDEX IF NOT EXISTS idx_documents_tenant_id "
+            "ON documents (tenant_id)"
+        ))
     logger.info("Database ready.")
     yield
     # Shutdown
