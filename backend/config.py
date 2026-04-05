@@ -6,7 +6,7 @@ class Settings(BaseSettings):
     # App
     app_env: str = "development"
     app_secret_key: str = "change-me-in-production"
-    debug: bool = True
+    debug: bool = False  # SQL echo + verbose logging; auto-enabled in development below
 
     # Database
     database_url: str = "postgresql+asyncpg://wonder:localdev123@localhost:5433/wonderchat"
@@ -47,6 +47,11 @@ class Settings(BaseSettings):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
+
+        # Enable debug automatically in development unless explicitly overridden
+        if "debug" not in kwargs and self.app_env == "development":
+            object.__setattr__(self, "debug", True)
+
         # Shell may export empty ANTHROPIC_API_KEY (e.g. from Claude Code).
         # If the loaded value is empty, re-read directly from .env.
         if not self.anthropic_api_key:

@@ -11,6 +11,19 @@
     return;
   }
 
+  // --- HTML escaping to prevent stored XSS from admin-set config values ---
+  function escapeHtml(str) {
+    if (!str) return "";
+    return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+  }
+
+  // --- Validate URLs: only allow http/https to prevent javascript: injection ---
+  function safeUrl(url) {
+    if (!url) return null;
+    if (/^https?:\/\//i.test(url)) return url;
+    return null;
+  }
+
   // --- State ---
   let isOpen = false;
   let isLoading = false;
@@ -127,18 +140,20 @@
     const botMsgColor = isDark ? "#e5e7eb" : "#1a1a1a";
     const poweredBg = isDark ? "#111827" : "#fafafa";
 
-    // Launcher icon
+    // Launcher icon (sanitize admin-controlled URLs to prevent stored XSS)
     let launcherContent;
-    if (cfg.launcher_icon === "custom" && cfg.launcher_icon_url) {
-      launcherContent = '<img class="wc-launcher-img" src="' + cfg.launcher_icon_url + '" alt="Chat" />';
+    const safeLauncherUrl = safeUrl(cfg.launcher_icon_url);
+    if (cfg.launcher_icon === "custom" && safeLauncherUrl) {
+      launcherContent = '<img class="wc-launcher-img" src="' + escapeHtml(safeLauncherUrl) + '" alt="Chat" />';
     } else {
       launcherContent = ICONS[cfg.launcher_icon] || ICONS.chat;
     }
 
-    // Bot avatar
+    // Bot avatar (sanitize URL and alt text)
     let avatarHtml = "";
-    if (cfg.bot_avatar_url) {
-      avatarHtml = '<img class="wc-avatar" src="' + cfg.bot_avatar_url + '" alt="' + cfg.bot_name + '" />';
+    const safeAvatarUrl = safeUrl(cfg.bot_avatar_url);
+    if (safeAvatarUrl) {
+      avatarHtml = '<img class="wc-avatar" src="' + escapeHtml(safeAvatarUrl) + '" alt="' + escapeHtml(cfg.bot_name) + '" />';
     }
 
     // --- Shadow DOM ---
@@ -382,14 +397,14 @@
       <div class="wc-window" role="dialog" aria-label="Chat window">
         <div class="wc-header">
           <div class="wc-header-left">
-            ${cfg.bot_avatar_url ? '<img class="wc-header-avatar" src="' + cfg.bot_avatar_url + '" alt="" />' : ""}
-            <span>${cfg.header_text}</span>
+            ${safeAvatarUrl ? '<img class="wc-header-avatar" src="' + escapeHtml(safeAvatarUrl) + '" alt="" />' : ""}
+            <span>${escapeHtml(cfg.header_text)}</span>
           </div>
           <button class="wc-header-close" aria-label="Close chat">&times;</button>
         </div>
         <div class="wc-messages" role="log" aria-live="polite"></div>
         <div class="wc-input-area">
-          <input class="wc-input" placeholder="${cfg.placeholder_text}" maxlength="${cfg.max_message_length}" />
+          <input class="wc-input" placeholder="${escapeHtml(cfg.placeholder_text)}" maxlength="${cfg.max_message_length}" />
           <button class="wc-send">Send</button>
         </div>
         ${cfg.show_powered_by ? '<div class="wc-powered">Powered by <a href="#">WonderChat</a></div>' : ""}
@@ -431,11 +446,11 @@
       var row = document.createElement("div");
       row.className = "wc-msg-row " + role;
 
-      // Bot avatar
-      if (role === "bot" && cfg.bot_avatar_url) {
+      // Bot avatar (use validated URL)
+      if (role === "bot" && safeAvatarUrl) {
         var avatar = document.createElement("img");
         avatar.className = "wc-msg-avatar";
-        avatar.src = cfg.bot_avatar_url;
+        avatar.src = safeAvatarUrl;
         avatar.alt = cfg.bot_name;
         row.appendChild(avatar);
       }
@@ -480,10 +495,10 @@
       var row = document.createElement("div");
       row.className = "wc-msg-row bot";
       row.id = "wc-typing-row";
-      if (cfg.bot_avatar_url) {
+      if (safeAvatarUrl) {
         var avatar = document.createElement("img");
         avatar.className = "wc-msg-avatar";
-        avatar.src = cfg.bot_avatar_url;
+        avatar.src = safeAvatarUrl;
         avatar.alt = "";
         row.appendChild(avatar);
       }

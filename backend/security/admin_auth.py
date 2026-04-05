@@ -1,5 +1,5 @@
 import hashlib
-import secrets
+import hmac
 from fastapi import Header, HTTPException
 from backend.config import get_settings
 
@@ -25,5 +25,7 @@ async def require_admin(
     token = authorization[7:]
     token_hash = hashlib.sha256(token.encode()).hexdigest()
 
-    if token_hash != _expected_admin_hash():
+    # Use constant-time comparison to prevent timing attacks.
+    # A regular != leaks hash info via response-time differences.
+    if not hmac.compare_digest(token_hash, _expected_admin_hash()):
         raise HTTPException(status_code=403, detail="Invalid admin token")
