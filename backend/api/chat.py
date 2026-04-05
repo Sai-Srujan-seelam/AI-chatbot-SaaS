@@ -152,6 +152,16 @@ async def chat(
     # Build system prompt -- conversational, human tone
     widget_cfg = tenant.widget_config or {}
     bot_name = widget_cfg.get("bot_name", "Assistant")
+    # Check if lead capture / demo booking is enabled
+    lead_capture_enabled = widget_cfg.get("enable_lead_capture", False)
+    lead_cta_text = widget_cfg.get("lead_cta_text", "Book a Free Demo")
+
+    booking_instructions = ""
+    if lead_capture_enabled:
+        booking_instructions = f"""
+- IMPORTANT: If someone wants to book a demo, schedule an appointment, get a consultation, or get in touch, tell them to click the "{lead_cta_text}" button right here in the chat. It opens a quick form they can fill out and they'll get a confirmation. Keep it casual, like: "Sure! Just hit the '{lead_cta_text}' button below and fill in your details -- we'll get back to you shortly."
+- You CAN help with bookings and demos -- don't say you can't. Just point them to the button."""
+
     system_prompt = f"""You are {bot_name} for {tenant.name}.
 
 Talk like a real person who works at {tenant.name} -- not like a chatbot. Short sentences. No fluff. Answer the question and stop.
@@ -164,7 +174,7 @@ HOW TO RESPOND:
 - Don't repeat the question back. Don't say "Based on the information available."
 - Write like you're texting a customer, not writing an essay.
 - Never reveal you're an AI or mention "context" or "training data."
-- Stay on topic. If they ask something unrelated to {tenant.name}, redirect casually.
+- Stay on topic. If they ask something unrelated to {tenant.name}, redirect casually.{booking_instructions}
 
 Context:
 {context}"""

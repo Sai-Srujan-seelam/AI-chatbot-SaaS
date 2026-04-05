@@ -317,6 +317,17 @@
         }
         .wc-cta-btn:hover { opacity: 0.9; }
 
+        /* Persistent CTA bar above input */
+        .wc-cta-bar {
+          padding: 8px 16px;
+          border-top: 1px solid ${inputBorder};
+          flex-shrink: 0;
+          background: ${bgColor};
+        }
+        .wc-cta-persistent {
+          width: 100%;
+        }
+
         /* Lead capture form overlay */
         .wc-lead-form {
           display: none;
@@ -546,6 +557,7 @@
         </div>
         <div class="wc-messages" role="log" aria-live="polite"></div>
         <div class="wc-lead-form"></div>
+        ${cfg.enable_lead_capture ? '<div class="wc-cta-bar"><button class="wc-cta-btn wc-cta-persistent">' + escapeHtml(cfg.lead_cta_text) + '</button></div>' : ''}
         <div class="wc-input-area">
           <input class="wc-input" placeholder="${escapeHtml(cfg.placeholder_text)}" maxlength="${cfg.max_message_length}" />
           <button class="wc-send">Send</button>
@@ -566,6 +578,13 @@
     const messagesEl = shadow.querySelector(".wc-messages");
     const leadFormEl = shadow.querySelector(".wc-lead-form");
     const inputAreaEl = shadow.querySelector(".wc-input-area");
+    const ctaBarEl = shadow.querySelector(".wc-cta-bar");
+
+    // Wire up persistent CTA button
+    const persistentCtaBtn = shadow.querySelector(".wc-cta-persistent");
+    if (persistentCtaBtn) {
+      persistentCtaBtn.addEventListener("click", function () { showLeadForm(); });
+    }
 
     // --- Restore persisted messages ---
     const savedMessages = loadMessages();
@@ -573,41 +592,26 @@
       savedMessages.forEach(function (m) { appendMessage(m.text, m.role, m.sources, true); });
     }
 
-    // --- Show welcome + suggestions + CTA ---
+    // --- Show welcome + suggested questions ---
     function showWelcome() {
       appendMessage(cfg.welcome_message, "bot");
 
       var hasSuggestions = cfg.suggested_questions && cfg.suggested_questions.length > 0;
-      var hasCta = cfg.enable_lead_capture;
-      if (!hasSuggestions && !hasCta) return;
+      if (!hasSuggestions) return;
 
       var suggestionsDiv = document.createElement("div");
       suggestionsDiv.className = "wc-suggestions";
 
-      // Suggested questions as clickable buttons
-      if (hasSuggestions) {
-        cfg.suggested_questions.forEach(function (q) {
-          var btn = document.createElement("button");
-          btn.className = "wc-suggestion-btn";
-          btn.textContent = q;
-          btn.addEventListener("click", function () {
-            suggestionsDiv.remove();
-            sendMessage(q);
-          });
-          suggestionsDiv.appendChild(btn);
+      cfg.suggested_questions.forEach(function (q) {
+        var btn = document.createElement("button");
+        btn.className = "wc-suggestion-btn";
+        btn.textContent = q;
+        btn.addEventListener("click", function () {
+          suggestionsDiv.remove();
+          sendMessage(q);
         });
-      }
-
-      // CTA button (e.g. "Book a Free Demo")
-      if (hasCta) {
-        var ctaBtn = document.createElement("button");
-        ctaBtn.className = "wc-cta-btn";
-        ctaBtn.textContent = cfg.lead_cta_text;
-        ctaBtn.addEventListener("click", function () {
-          showLeadForm();
-        });
-        suggestionsDiv.appendChild(ctaBtn);
-      }
+        suggestionsDiv.appendChild(btn);
+      });
 
       messagesEl.appendChild(suggestionsDiv);
       messagesEl.scrollTop = messagesEl.scrollHeight;
@@ -617,6 +621,7 @@
     function showLeadForm() {
       messagesEl.style.display = "none";
       inputAreaEl.style.display = "none";
+      if (ctaBarEl) ctaBarEl.style.display = "none";
       leadFormEl.classList.add("active");
 
       var fields = cfg.lead_form_fields || ["name", "email"];
@@ -658,6 +663,7 @@
       leadFormEl.innerHTML = "";
       messagesEl.style.display = "";
       inputAreaEl.style.display = "";
+      if (ctaBarEl) ctaBarEl.style.display = "";
       input.focus();
     }
 
@@ -729,12 +735,16 @@
     }
 
     // --- Interactions ---
+    // Track whether welcome has been shown this page load
+    var welcomeShown = false;
+
     function toggleChat() {
       isOpen = !isOpen;
       chatWindow.classList.toggle("open", isOpen);
       if (isOpen) {
         input.focus();
-        if (messagesEl.children.length === 0) {
+        if (!welcomeShown && messagesEl.querySelectorAll(".wc-msg-row").length === 0) {
+          welcomeShown = true;
           showWelcome();
         }
       }

@@ -3,6 +3,8 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from starlette.middleware import Middleware
+from starlette.middleware.base import BaseHTTPMiddleware
 from backend.config import get_settings
 from backend.database import engine, Base
 from backend.api.chat import router as chat_router
@@ -88,6 +90,18 @@ else:
         allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
         allow_headers=["Content-Type", "X-Api-Key", "Authorization"],
     )
+
+# Middleware to prevent caching of widget JS (browsers aggressively cache .js files)
+class NoCacheWidgetMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request, call_next):
+        response = await call_next(request)
+        if request.url.path.startswith("/static/widget"):
+            response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+            response.headers["Pragma"] = "no-cache"
+            response.headers["Expires"] = "0"
+        return response
+
+app.add_middleware(NoCacheWidgetMiddleware)
 
 # Static files (widget JS)
 app.mount("/static", StaticFiles(directory="static"), name="static")
