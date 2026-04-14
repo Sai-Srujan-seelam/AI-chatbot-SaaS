@@ -28,3 +28,4 @@ class Lead(Base):
     )
 
     tenant = relationship("Tenant", back_populates="leads")
+    messages = relationship("Message", back_populates="lead", cascade="all, delete-orphan")

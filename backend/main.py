@@ -9,6 +9,7 @@ from backend.config import get_settings
 from backend.database import engine, Base
 from backend.api.chat import router as chat_router
 from backend.api.admin import router as admin_router
+from backend.api.portal import router as portal_router
 
 logging.basicConfig(
     level=logging.INFO,
@@ -109,6 +110,7 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 # Routes
 app.include_router(chat_router, prefix="/api/v1", tags=["Chat"])
 app.include_router(admin_router, prefix="/api/v1/admin", tags=["Admin"])
+app.include_router(portal_router, prefix="/api/v1/portal", tags=["Client Portal"])
 
 
 @app.get("/health")

@@ -43,3 +43,4 @@ class Tenant(Base):
     documents = relationship("Document", back_populates="tenant", cascade="all, delete-orphan")
     conversations = relationship("Conversation", back_populates="tenant", cascade="all, delete-orphan")
     leads = relationship("Lead", back_populates="tenant", cascade="all, delete-orphan")
+    client_users = relationship("ClientUser", back_populates="tenant", cascade="all, delete-orphan")

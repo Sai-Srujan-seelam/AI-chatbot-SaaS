@@ -212,6 +212,49 @@ export async function uploadImage(tenantId: string, file: File): Promise<{ url: 
   return res.json();
 }
 
+// --- Portal Users ---
+export interface PortalUser {
+  id: string;
+  email: string;
+  full_name: string;
+  role: string;
+  is_active: boolean;
+  created_at: string;
+}
+
+export const listPortalUsers = (tenantId: string) =>
+  request<{ items: PortalUser[] }>(`/api/v1/admin/tenants/${tenantId}/portal-users`);
+
+export const createPortalUser = (tenantId: string, data: {
+  email: string;
+  password: string;
+  full_name: string;
+  role?: string;
+  phone?: string;
+}) =>
+  request<{ id: string; email: string; full_name: string; role: string }>(
+    `/api/v1/admin/tenants/${tenantId}/portal-users`,
+    { method: "POST", body: JSON.stringify(data) }
+  );
+
+export const deletePortalUser = (userId: string) =>
+  request<null>(`/api/v1/admin/portal-users/${userId}`, { method: "DELETE" });
+
+// --- Master Analytics ---
+export interface MasterAnalytics {
+  total_tenants: number;
+  total_leads: number;
+  leads_this_month: number;
+  total_conversations: number;
+  total_messages_sent: number;
+  tenants_with_active_replies: number;
+  leads_per_tenant: { tenant: string; leads: number }[];
+  conversion_rates: { tenant: string; total: number; converted: number; rate: number }[];
+}
+
+export const getMasterAnalytics = () =>
+  request<MasterAnalytics>("/api/v1/admin/analytics");
+
 // --- Stats ---
 export interface TenantStats {
   tenant_id: string;

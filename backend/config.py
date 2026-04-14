@@ -43,6 +43,19 @@ class Settings(BaseSettings):
     scraper_max_pages: int = 50
     scraper_timeout: int = 15
 
+    # JWT (client portal auth)
+    jwt_secret_key: str = "change-me-jwt-secret-in-production"
+    jwt_algorithm: str = "HS256"
+    jwt_expire_minutes: int = 1440  # 24 hours
+
+    # Twilio (SMS)
+    twilio_account_sid: str = ""
+    twilio_auth_token: str = ""
+    twilio_phone_number: str = ""
+
+    # SendGrid (email replies) — falls back to SMTP if not set
+    sendgrid_api_key: str = ""
+
     # SMTP (for lead confirmations and notifications)
     smtp_host: str = ""
     smtp_port: int = 587

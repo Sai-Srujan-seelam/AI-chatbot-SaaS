@@ -29,6 +29,9 @@ from backend.api.schemas import (
     WidgetConfigResponse,
     ApiKeyRotateResponse,
 )
+from backend.api.portal_schemas import CreatePortalUser, PortalUserResponse
+from backend.models.client_user import ClientUser
+from backend.security.portal_auth import hash_password
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -533,6 +536,165 @@ async def update_lead_status(
         lead.status = payload["status"]
     await db.commit()
     return {"id": str(lead.id), "status": lead.status}
+
+
+# --- Portal User Management ---
+
+
+@router.post("/tenants/{tenant_id}/portal-users", status_code=201)
+async def create_portal_user(
+    tenant_id: UUID,
+    payload: CreatePortalUser,
+    _admin=Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Create a portal login for a tenant's staff."""
+    await _get_tenant_or_404(db, tenant_id)
+
+    # Check email uniqueness
+    existing = await db.execute(
+        select(ClientUser).where(ClientUser.email == payload.email)
+    )
+    if existing.scalar_one_or_none():
+        raise HTTPException(status_code=409, detail="Email already registered")
+
+    user = ClientUser(
+        tenant_id=tenant_id,
+        email=payload.email,
+        password_hash=hash_password(payload.password),
+        full_name=payload.full_name,
+        role=payload.role,
+        phone=payload.phone,
+    )
+    db.add(user)
+    await db.commit()
+    await db.refresh(user)
+
+    logger.info(f"Created portal user: {user.email} for tenant {tenant_id}")
+
+    return {
+        "id": str(user.id),
+        "email": user.email,
+        "full_name": user.full_name,
+        "role": user.role,
+        "tenant_id": str(tenant_id),
+    }
+
+
+@router.get("/tenants/{tenant_id}/portal-users")
+async def list_portal_users(
+    tenant_id: UUID,
+    _admin=Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """List portal users for a tenant."""
+    await _get_tenant_or_404(db, tenant_id)
+    result = await db.execute(
+        select(ClientUser).where(ClientUser.tenant_id == tenant_id)
+        .order_by(ClientUser.created_at.desc())
+    )
+    users = [
+        {
+            "id": str(u.id),
+            "email": u.email,
+            "full_name": u.full_name,
+            "role": u.role,
+            "is_active": u.is_active,
+            "created_at": u.created_at.isoformat(),
+        }
+        for u in result.scalars().all()
+    ]
+    return {"items": users}
+
+
+@router.delete("/portal-users/{user_id}", status_code=204)
+async def delete_portal_user(
+    user_id: UUID,
+    _admin=Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Delete a portal user."""
+    result = await db.execute(select(ClientUser).where(ClientUser.id == user_id))
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    await db.delete(user)
+    await db.commit()
+
+
+# --- Master Analytics (all tenants) ---
+
+
+@router.get("/analytics")
+async def master_analytics(
+    _admin=Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Global analytics across all tenants."""
+    from datetime import datetime, timezone, timedelta
+    from backend.models.message import Message
+    now = datetime.now(timezone.utc)
+    month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+
+    total_tenants = (await db.execute(
+        select(func.count()).select_from(Tenant)
+    )).scalar() or 0
+
+    total_leads = (await db.execute(
+        select(func.count()).select_from(Lead)
+    )).scalar() or 0
+
+    leads_this_month = (await db.execute(
+        select(func.count()).select_from(Lead).where(Lead.created_at >= month_start)
+    )).scalar() or 0
+
+    total_conversations = (await db.execute(
+        select(func.count()).select_from(Conversation)
+    )).scalar() or 0
+
+    total_messages_sent = (await db.execute(
+        select(func.count()).select_from(Message).where(Message.sender_type == "client")
+    )).scalar() or 0
+
+    # Leads per tenant
+    leads_per_tenant = await db.execute(
+        select(Tenant.name, func.count(Lead.id))
+        .outerjoin(Lead, Lead.tenant_id == Tenant.id)
+        .group_by(Tenant.name)
+        .order_by(func.count(Lead.id).desc())
+    )
+    by_tenant = [{"tenant": row[0], "leads": row[1]} for row in leads_per_tenant.fetchall()]
+
+    # Conversion rates per tenant
+    conversion_result = await db.execute(
+        select(
+            Tenant.name,
+            func.count(Lead.id).label("total"),
+            func.count(case((Lead.status == "converted", 1))).label("converted"),
+        )
+        .outerjoin(Lead, Lead.tenant_id == Tenant.id)
+        .group_by(Tenant.name)
+    )
+    conversions = []
+    for row in conversion_result.fetchall():
+        rate = round((row[2] / row[1]) * 100, 1) if row[1] > 0 else 0.0
+        conversions.append({"tenant": row[0], "total": row[1], "converted": row[2], "rate": rate})
+
+    # Response rates
+    tenants_with_replies = (await db.execute(
+        select(func.count(func.distinct(Message.tenant_id))).where(Message.sender_type == "client")
+    )).scalar() or 0
+
+    return {
+        "total_tenants": total_tenants,
+        "total_leads": total_leads,
+        "leads_this_month": leads_this_month,
+        "total_conversations": total_conversations,
+        "total_messages_sent": total_messages_sent,
+        "tenants_with_active_replies": tenants_with_replies,
+        "leads_per_tenant": by_tenant,
+        "conversion_rates": conversions,
+    }
 
 
 # --- Helpers ---

@@ -19,6 +19,7 @@ from backend.ingestion.embedder import embed_query
 from backend.api.schemas import ChatRequest, ChatResponse, LeadCaptureRequest, LeadCaptureResponse
 from backend.config import get_settings
 from backend.services.email import send_lead_confirmation, send_lead_notification
+from backend.api.portal import create_lead_notification
 import anthropic
 
 logger = logging.getLogger(__name__)
@@ -245,6 +246,10 @@ async def capture_lead(
     await db.commit()
 
     logger.info(f"Lead captured for tenant {tenant.name}: {req.email} ({req.lead_type})")
+
+    # Create in-app notification for the portal
+    await create_lead_notification(db, tenant.id, lead)
+    await db.commit()
 
     # Send confirmation email to the visitor and notification to the tenant
     await send_lead_confirmation(

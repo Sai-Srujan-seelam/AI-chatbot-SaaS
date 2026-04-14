@@ -7,7 +7,8 @@ import Sidebar from "@/components/sidebar";
 import {
   getTenant, getTenantStats, updateTenant, deleteTenant, rotateApiKey,
   ingestWebsite, ingestText, listDocuments, listConversations, listLeads, uploadImage,
-  type Tenant, type TenantStats,
+  listPortalUsers, createPortalUser, deletePortalUser,
+  type Tenant, type TenantStats, type PortalUser,
 } from "@/lib/api";
 
 export default function TenantDetailPage() {
@@ -18,7 +19,7 @@ export default function TenantDetailPage() {
   const [tenant, setTenant] = useState<Tenant | null>(null);
   const [stats, setStats] = useState<TenantStats | null>(null);
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState<"overview" | "ingest" | "widget" | "conversations" | "documents" | "leads">("overview");
+  const [tab, setTab] = useState<"overview" | "ingest" | "widget" | "conversations" | "documents" | "leads" | "portal_users">("overview");
 
   async function load() {
     try {
@@ -44,6 +45,7 @@ export default function TenantDetailPage() {
     { key: "conversations", label: "Conversations" },
     { key: "documents", label: "Documents" },
     { key: "leads", label: "Leads" },
+    { key: "portal_users", label: "Portal Users" },
   ] as const;
 
   return (
@@ -107,6 +109,7 @@ export default function TenantDetailPage() {
         {tab === "conversations" && <ConversationsTab tenantId={id} />}
         {tab === "documents" && <DocumentsTab tenantId={id} />}
         {tab === "leads" && <LeadsTab tenantId={id} />}
+        {tab === "portal_users" && <PortalUsersTab tenantId={id} />}
       </main>
     </div>
   );
@@ -800,6 +803,149 @@ function LoadingPage() {
     </div>
   );
 }
+
+// --- Portal Users Tab ---
+function PortalUsersTab({ tenantId }: { tenantId: string }) {
+  const [users, setUsers] = useState<PortalUser[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [showForm, setShowForm] = useState(false);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [fullName, setFullName] = useState("");
+  const [role, setRole] = useState("manager");
+  const [creating, setCreating] = useState(false);
+  const [error, setError] = useState("");
+
+  async function load() {
+    try {
+      const res = await listPortalUsers(tenantId);
+      setUsers(res.items);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => { load(); }, [tenantId]);
+
+  async function handleCreate(e: React.FormEvent) {
+    e.preventDefault();
+    setCreating(true);
+    setError("");
+    try {
+      await createPortalUser(tenantId, { email, password, full_name: fullName, role });
+      setEmail(""); setPassword(""); setFullName(""); setRole("manager");
+      setShowForm(false);
+      load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to create user");
+    } finally {
+      setCreating(false);
+    }
+  }
+
+  async function handleDelete(userId: string) {
+    if (!confirm("Delete this portal user?")) return;
+    await deletePortalUser(userId);
+    load();
+  }
+
+  if (loading) return <div className="flex justify-center py-12"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900" /></div>;
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h3 className="text-lg font-semibold text-gray-900">Portal Users</h3>
+          <p className="text-sm text-gray-500">Client staff who can log into the lead management portal</p>
+        </div>
+        <button
+          onClick={() => setShowForm(!showForm)}
+          className="px-4 py-2 bg-gray-900 text-white text-sm font-medium rounded-lg hover:bg-gray-800 transition-colors"
+        >
+          {showForm ? "Cancel" : "+ Add User"}
+        </button>
+      </div>
+
+      {showForm && (
+        <form onSubmit={handleCreate} className="bg-white rounded-xl border border-gray-200 p-6 space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
+              <input type="text" value={fullName} onChange={(e) => setFullName(e.target.value)} required
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+              <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
+              <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={8}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Role</label>
+              <select value={role} onChange={(e) => setRole(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500">
+                <option value="owner">Owner</option>
+                <option value="manager">Manager</option>
+                <option value="staff">Staff</option>
+              </select>
+            </div>
+          </div>
+          {error && <p className="text-sm text-red-600">{error}</p>}
+          <button type="submit" disabled={creating}
+            className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50">
+            {creating ? "Creating..." : "Create User"}
+          </button>
+        </form>
+      )}
+
+      {users.length === 0 ? (
+        <div className="bg-white rounded-xl border border-gray-200 p-8 text-center text-gray-500">
+          <p>No portal users yet. Create one to give this client access to their lead dashboard.</p>
+        </div>
+      ) : (
+        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+          <table className="w-full">
+            <thead className="bg-gray-50 text-xs text-gray-500 uppercase">
+              <tr>
+                <th className="px-6 py-3 text-left">Name</th>
+                <th className="px-6 py-3 text-left">Email</th>
+                <th className="px-6 py-3 text-left">Role</th>
+                <th className="px-6 py-3 text-left">Created</th>
+                <th className="px-6 py-3 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-50">
+              {users.map((u) => (
+                <tr key={u.id} className="hover:bg-gray-50">
+                  <td className="px-6 py-3 text-sm font-medium text-gray-900">{u.full_name}</td>
+                  <td className="px-6 py-3 text-sm text-gray-600">{u.email}</td>
+                  <td className="px-6 py-3">
+                    <span className="inline-flex px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-700 capitalize">
+                      {u.role}
+                    </span>
+                  </td>
+                  <td className="px-6 py-3 text-sm text-gray-500">{new Date(u.created_at).toLocaleDateString()}</td>
+                  <td className="px-6 py-3 text-right">
+                    <button onClick={() => handleDelete(u.id)} className="text-xs text-red-600 hover:text-red-700">
+                      Delete
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
 
 function NotFoundPage() {
   return (
