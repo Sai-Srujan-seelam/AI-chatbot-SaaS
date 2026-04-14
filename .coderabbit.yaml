@@ -1,0 +1,87 @@
+# CodeRabbit configuration for AI-chatbot-SaaS
+# Docs: https://docs.coderabbit.ai
+
+language: en-US
+
+reviews:
+  profile: assertive
+  request_changes_workflow: true
+  high_level_summary: true
+  poem: false
+  review_status: true
+  collapse_walkthrough: false
+  auto_review:
+    enabled: true
+    drafts: false
+    base_branches:
+      - main
+
+  path_instructions:
+    - path: "backend/**"
+      instructions: |
+        Review for FastAPI best practices, async/await correctness, SQLAlchemy ORM
+        usage, Alembic migration safety, multi-tenant data isolation (every query
+        must be scoped to tenant_id), JWT auth correctness, secret handling (no
+        hardcoded credentials), input validation via Pydantic, proper HTTP status
+        codes, and rate limiting via Redis. Flag any cross-tenant data leakage.
+
+    - path: "backend/security/**"
+      instructions: |
+        Deep security review: JWT token generation/validation, password hashing,
+        admin vs portal auth separation, rate limiting implementation, CORS config,
+        and any potential auth bypass vectors. Flag anything that could allow
+        privilege escalation or unauthenticated access.
+
+    - path: "backend/models/**"
+      instructions: |
+        Check all SQLAlchemy models for proper tenant_id foreign keys, missing
+        indexes, cascade delete correctness, and relationship definitions that
+        could leak cross-tenant data. Validate Alembic migrations match models.
+
+    - path: "backend/ingestion/**"
+      instructions: |
+        Review scraper for crawl limits, blocking I/O that should be async,
+        unsafe URL handling, chunker for edge cases with empty/malformed text,
+        embedder for proper error handling and retry logic, and dimension
+        consistency across vector storage.
+
+    - path: "admin/**"
+      instructions: |
+        Review Next.js/TypeScript code for type safety, missing null checks,
+        unsafe API calls without error handling, auth token storage and refresh
+        logic, XSS risks in rendered content, and proper use of server vs client
+        components.
+
+    - path: "portal/**"
+      instructions: |
+        Review Next.js/TypeScript client portal for JWT session handling,
+        tenant-scoped API calls, client user auth flows, unsafe rendering of
+        user-generated content, and any data that should not be exposed to
+        portal users.
+
+    - path: "widget/**"
+      instructions: |
+        Critical security review: XSS prevention in Shadow DOM implementation,
+        safe postMessage handling, API key exposure in client-side JS, CSP
+        compatibility, iframe sandboxing, embed script injection safety, and
+        any data leakage through the public-facing widget API.
+
+    - path: "static/**"
+      instructions: |
+        Review static JS/CSS for XSS risks, insecure third-party dependencies,
+        API keys or secrets accidentally included, and CDN security headers.
+
+    - path: ".github/**"
+      instructions: |
+        Review GitHub Actions workflows for secret handling (no hardcoded tokens),
+        use of pinned action versions, least-privilege permissions, and any
+        supply chain attack vectors.
+
+    - path: "alembic/**"
+      instructions: |
+        Review migrations for data loss risks, missing rollback steps, schema
+        changes that could break existing multi-tenant data, and index creation
+        done concurrently to avoid table locks in production.
+
+chat:
+  auto_reply: true
