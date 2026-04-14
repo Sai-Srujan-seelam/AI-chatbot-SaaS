@@ -1,161 +1,145 @@
 <div align="center">
 
-# WonderChat
+# WonderAvenues
 
-### Open-source Intercom alternative powered by AI
+### The open-source AI platform for client websites
 
-**Your clients paste one `<script>` tag. Their website gets an AI assistant that actually knows their business.**
+**AI chatbot + client portal + lead management -- deploy once, serve every client.**
 
-No monthly per-seat pricing. No vendor lock-in. You own the whole stack.
+One `<script>` tag gives any website a smart assistant. One dashboard gives your clients full visibility into leads, conversations, and performance.
 
 [![Python](https://img.shields.io/badge/python-3.11+-blue?logo=python&logoColor=white)](https://python.org)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
-[![Claude API](https://img.shields.io/badge/Claude_API-Anthropic-6B4FBB?logo=anthropic&logoColor=white)](https://anthropic.com)
+[![Next.js](https://img.shields.io/badge/Next.js-16-000?logo=next.js&logoColor=white)](https://nextjs.org)
+[![Claude API](https://img.shields.io/badge/Claude-Anthropic-6B4FBB?logo=anthropic&logoColor=white)](https://anthropic.com)
 [![pgvector](https://img.shields.io/badge/PostgreSQL-pgvector-4169E1?logo=postgresql&logoColor=white)](https://github.com/pgvector/pgvector)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
-[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 
-[Quick Start](#quick-start) · [Live Demo](#embed-the-widget) · [API Docs](#api-reference) · [Roadmap](#roadmap) · [Contributing](#contributing)
+[Quick Start](#quick-start) · [Client Portal](#client-portal) · [API Docs](#api-reference) · [Architecture](#architecture) · [Roadmap](#roadmap)
 
 </div>
 
 ---
 
-## The Problem
+## What This Is
 
-Intercom charges **$39/seat/month**. Drift starts at **$2,500/month**. Tidio, Zendesk, LivePerson -- they all add up fast when you're reselling to clients.
+WonderAvenues is a complete AI-powered platform you self-host and resell to clients. It has three layers:
 
-Your clients just want a chat bubble that answers "What are your hours?" without hallucinating.
+1. **AI Chatbot Widget** -- embeddable chat bubble that answers visitor questions using the client's own website content (RAG pipeline with Claude + pgvector)
+2. **Client Portal** -- per-tenant dashboard where each client manages their leads, reads conversations, configures their chatbot, and tracks analytics
+3. **Admin Panel** -- your internal dashboard to onboard tenants, manage portal users, and monitor the entire platform
 
-## The Solution
-
-WonderChat scrapes your client's website, chunks it, embeds it with Voyage AI, stores it in pgvector, and uses Claude to answer questions **using only that business's content**. No hallucinated phone numbers. No made-up pricing. No "as an AI language model" responses.
-
-You host it once. Every client gets their own isolated tenant with their own API key, their own knowledge base, and their own branded widget.
+Every tenant is fully isolated. Their data, API keys, portal logins, and chatbot config are scoped to their `tenant_id` at the database query level.
 
 ---
 
-## How It Works
+## Why WonderAvenues
 
-```
-Client's website                          Your backend
-┌──────────────────────┐                 ┌──────────────────────────┐
-│                      │                 │  FastAPI                 │
-│  <script             │    HTTPS        │  ├── RAG pipeline        │
-│    src="widget.js"   │ ──────────────> │  │   ├── pgvector search │
-│    data-key="wc_..."│                  │  │   └── Claude API      │
-│  />                  │ <────────────── │  ├── Redis rate limiter  │
-│                      │    JSON reply   │  └── Multi-tenant auth   │
-│  [chat bubble]       │                 │                          │
-└──────────────────────┘                 └──────────────────────────┘
-```
-
-1. **Create a tenant** for your client via the admin dashboard or API
-2. **Point the scraper** at their website -- it crawls pages, chunks the text, and stores vector embeddings
-3. **Give them a script tag** -- one line of HTML, works on any platform
-4. **Visitors ask questions** through the chat widget, get answers grounded in real content
-
----
-
-## Why WonderChat Over the Alternatives
-
-| | WonderChat | Intercom | Drift | Tidio |
+| | WonderAvenues | Intercom | DearDoc | Drift |
 |---|---|---|---|---|
-| **Pricing** | Free (self-hosted) | $39/seat/mo | $2,500/mo | $29/mo |
-| **AI grounded in client content** | Yes (RAG) | Partial | Partial | No |
-| **Multi-tenant (resell to clients)** | Built-in | No | No | No |
+| **Pricing** | Free (self-hosted) | $39/seat/mo | Custom | $2,500/mo |
+| **AI grounded in client content** | Yes (RAG) | Partial | Yes | Partial |
+| **Multi-tenant** | Built-in | No | No | No |
+| **Client-facing portal** | Yes | No | Yes | No |
+| **Lead management** | Yes | Add-on | Yes | Yes |
 | **Own your data** | 100% | No | No | No |
-| **Self-hosted** | Yes | No | No | No |
 | **Open source** | MIT | No | No | No |
-| **Setup time** | 5 minutes | Hours | Hours | Hours |
 
 ---
 
-## What's In The Box
+## Platform Overview
 
-### Backend -- FastAPI, async everywhere, multi-tenant from day one
-- Web scraper that crawls client sites and extracts clean content
-- Chunking pipeline with semantic boundaries and overlap for better retrieval
-- Voyage AI embeddings stored in pgvector with HNSW indexing
-- RAG chat endpoint backed by Claude with similarity thresholds
-- Tenant CRUD, usage stats, billing period tracking, widget config API
-- SHA-256 hashed API keys (never stored in plaintext)
-- Redis sliding-window rate limiter (proper sorted-set implementation)
-- Prompt injection detection (16 patterns) and response leak validation
-- Non-blocking embedding calls via thread pool executor
+### AI Chatbot Widget
 
-### Embeddable Widget -- one `<script>` tag, works anywhere
-- Shadow DOM isolation -- client CSS can't break it, and it can't break theirs
-- 25+ config options: colors, position, bot name, avatar, animations
-- Typing indicator, smooth animations, mobile responsive
-- Light/dark/auto theme with system preference detection
-- Session persistence and conversation history in localStorage
+The chat widget works on any website with one line of HTML. It uses Shadow DOM isolation so it never conflicts with client CSS.
+
+- RAG pipeline: scrape site, chunk text, embed with Voyage AI, store in pgvector, answer with Claude
+- 25+ config options (colors, position, bot name, avatar, animations, themes)
+- Lead capture form when the bot detects buying intent
+- Demo booking CTA during conversations
+- Session persistence in localStorage
 - Public JS API: `WonderChat.open()`, `.close()`, `.sendMessage()`, `.clearHistory()`
 
-### Admin Dashboard -- Next.js, full management UI
-- Token-based login with your APP_SECRET_KEY
-- Dashboard with server health, stat cards, and tenant overview
-- Tenant management: create, edit, delete, API key rotation
-- Trigger website scraping and text ingestion from the browser
-- View conversation logs and document chunks per tenant
-- Edit all widget config fields with live preview
+### Client Portal
 
-### Infrastructure -- Docker Compose, two containers
-- PostgreSQL 16 with pgvector extension
-- Redis 7 for rate limiting
+Each client gets their own login at `/portal` with JWT-based auth. The portal includes:
+
+| Page | What it does |
+|------|-------------|
+| **Dashboard** | Stat cards, recent leads, status breakdown, quick actions |
+| **Leads** | Filterable/searchable table with status, source, date range filters and pagination |
+| **Lead Detail** | Full chatbot conversation, threaded reply inbox, status management |
+| **Inbox** | Split-pane view of all AI chatbot conversations with search and lead linking |
+| **Analytics** | Three tabs -- Lead Overview (funnel, sources, trends), Chatbot Metrics (volume, top questions, chat-to-lead rate), Engagement & ROI (response time distribution, weekly trends) |
+| **Chatbot Config** | Four tabs -- Appearance (colors, position, avatar), Behavior (auto-open, sound, typing indicator), Lead Capture (form fields, triggers), Knowledge Base (chunk stats) |
+| **Notifications** | In-app notifications for new leads and replies with unread badges |
+| **Settings** | Profile editor, notification preferences, password change |
+| **Tools** | Placeholders for Payments, Patient Forms, and Reputation tools |
+
+Clients can reply to leads via **email**, **SMS** (Twilio), or **internal notes**, with template support for common responses.
+
+### Admin Panel
+
+Your internal control center for the whole platform:
+
+- Create and manage tenants
+- Onboard portal users (owner / manager / staff roles)
+- Trigger website scraping and content ingestion
+- View conversation logs and document chunks
+- Master analytics across all tenants
+- API key rotation and widget config editing
 
 ---
 
 ## Quick Start
 
-You need Docker, Python 3.11+, and API keys for [Anthropic](https://console.anthropic.com/) and [Voyage AI](https://dash.voyageai.com/).
+**Requirements:** Docker, Python 3.11+, Node.js 18+, API keys for [Anthropic](https://console.anthropic.com/) and [Voyage AI](https://dash.voyageai.com/).
+
+### 1. Clone and configure
 
 ```bash
-# Clone and configure
 git clone https://github.com/Sai-Srujan-seelam/AI-chatbot-SaaS.git
 cd AI-chatbot-SaaS
 cp .env.example .env
-# Add your keys: ANTHROPIC_API_KEY, VOYAGE_API_KEY, and APP_SECRET_KEY
+# Fill in: ANTHROPIC_API_KEY, VOYAGE_API_KEY, APP_SECRET_KEY, JWT_SECRET_KEY
+```
 
-# Start infrastructure
-docker compose up -d
+### 2. Start infrastructure
 
-# Install and run backend
-python -m venv .venv
-source .venv/bin/activate
+```bash
+docker compose up -d   # PostgreSQL 16 (pgvector) + Redis 7
+```
+
+### 3. Run the backend
+
+```bash
+python -m venv .venv && source .venv/bin/activate
 pip install -r backend/requirements.txt
 uvicorn backend.main:app --reload --port 8000
 ```
 
-API docs at `http://localhost:8000/docs` once the server is running.
-
-### Admin Dashboard (optional)
+### 4. Run the admin panel
 
 ```bash
-cd admin
-npm install
-npm run dev
-# Open http://localhost:3000 and sign in with your APP_SECRET_KEY
+cd admin && npm install && npm run dev
+# Open http://localhost:3000 -- sign in with your APP_SECRET_KEY
 ```
 
-Set `NEXT_PUBLIC_API_URL` if your backend isn't at `http://localhost:8000`.
-
-### Create a Tenant and Ingest Their Site
+### 5. Run the client portal
 
 ```bash
-# Create a tenant (save the api_key from the response -- shown only once)
+cd portal && npm install && npm run dev
+# Open http://localhost:3001/login -- sign in with portal credentials
+```
+
+### 6. Create a tenant and embed the widget
+
+```bash
+# Create a tenant via API (or use the admin UI)
 curl -s -X POST http://localhost:8000/api/v1/admin/tenants \
   -H "Authorization: Bearer YOUR_APP_SECRET_KEY" \
   -H "Content-Type: application/json" \
-  -d '{
-    "name": "Oakton Family Dental",
-    "domain": "oaktonfd.com",
-    "widget_config": {
-      "primary_color": "#2563eb",
-      "bot_name": "Oakton Assistant",
-      "welcome_message": "Hi! Ask me anything about our dental services."
-    }
-  }' | python -m json.tool
+  -d '{"name": "Oakton Family Dental", "domain": "oaktonfd.com"}' | python -m json.tool
 
 # Ingest their website
 curl -s -X POST http://localhost:8000/api/v1/admin/tenants/{TENANT_ID}/ingest \
@@ -164,9 +148,7 @@ curl -s -X POST http://localhost:8000/api/v1/admin/tenants/{TENANT_ID}/ingest \
   -d '{"url": "https://oaktonfd.com", "max_pages": 30}' | python -m json.tool
 ```
 
-### Embed the Widget
-
-Paste this before `</body>` on any HTML page:
+Then paste this before `</body>` on the client's site:
 
 ```html
 <script
@@ -177,7 +159,7 @@ Paste this before `</body>` on any HTML page:
 ></script>
 ```
 
-That's it. Open the page, click the chat bubble, ask a question.
+Create a portal user for the client from the admin panel's tenant detail page. They can then log into the client portal and see their leads, conversations, and analytics.
 
 ---
 
@@ -185,41 +167,56 @@ That's it. Open the page, click the chat bubble, ask a question.
 
 | Platform | Where to paste the script tag |
 |----------|-------------------------------|
-| **WordPress** | Appearance > Theme File Editor > `footer.php`, before `</body>`. Or use the WPCode plugin. |
-| **Wix** | Settings > Custom Code > Body - end section. |
-| **Shopify** | Online Store > Themes > Edit Code > `theme.liquid`, before `</body>`. |
-| **Squarespace** | Settings > Advanced > Code Injection > Footer. |
-| **Webflow** | Project Settings > Custom Code > Footer Code. |
-| **Any HTML** | Before `</body>` in your template or page. |
+| **WordPress** | Appearance > Theme File Editor > `footer.php`, before `</body>` |
+| **Wix** | Settings > Custom Code > Body - end section |
+| **Shopify** | Online Store > Themes > Edit Code > `theme.liquid`, before `</body>` |
+| **Squarespace** | Settings > Advanced > Code Injection > Footer |
+| **Webflow** | Project Settings > Custom Code > Footer Code |
+| **Any HTML** | Before `</body>` in your template |
 
 ---
 
 ## API Reference
 
-### Public (called by the widget)
+### Public (widget)
 
-| Method | Endpoint | What it does |
-|--------|----------|--------------|
-| `POST` | `/api/v1/chat` | Send a message, get a RAG-powered reply. Requires `X-Api-Key` header. |
-| `GET` | `/api/v1/admin/widget-config?api_key=...` | Returns widget theme and settings for the given key. |
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/api/v1/chat` | Send a message, get a RAG-powered reply. Requires `X-Api-Key`. |
+| `GET` | `/api/v1/admin/widget-config?api_key=...` | Widget theme and settings for the given key. |
 
-### Admin (requires `Authorization: Bearer` header)
+### Client Portal (JWT auth)
 
-| Method | Endpoint | What it does |
-|--------|----------|--------------|
-| `POST` | `/api/v1/admin/tenants` | Create a new tenant. Returns the API key (once). |
-| `GET` | `/api/v1/admin/tenants` | List all tenants (paginated). |
-| `GET` | `/api/v1/admin/tenants/{id}` | Get one tenant. |
-| `PATCH` | `/api/v1/admin/tenants/{id}` | Update tenant settings or widget config. |
-| `DELETE` | `/api/v1/admin/tenants/{id}` | Delete a tenant and all their data. |
-| `POST` | `/api/v1/admin/tenants/{id}/rotate-key` | Generate a new API key (old one dies immediately). |
-| `POST` | `/api/v1/admin/tenants/{id}/ingest` | Scrape a URL and ingest the content. |
-| `POST` | `/api/v1/admin/tenants/{id}/ingest-text` | Ingest raw text (FAQs, docs, product info). |
-| `GET` | `/api/v1/admin/tenants/{id}/documents` | List ingested document chunks. |
-| `GET` | `/api/v1/admin/tenants/{id}/conversations` | View conversation logs. |
-| `GET` | `/api/v1/admin/tenants/{id}/stats` | Usage stats, conversation counts, chunk counts. |
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/api/v1/portal/login` | Authenticate and receive JWT token |
+| `GET` | `/api/v1/portal/dashboard` | Dashboard stats and recent leads |
+| `GET` | `/api/v1/portal/leads` | List leads with filters (status, source, search, date range) |
+| `GET` | `/api/v1/portal/leads/{id}` | Lead detail with conversation and reply thread |
+| `PATCH` | `/api/v1/portal/leads/{id}/status` | Update lead status |
+| `POST` | `/api/v1/portal/leads/{id}/reply` | Reply via email, SMS, or internal note |
+| `GET` | `/api/v1/portal/conversations` | List all chatbot conversations |
+| `GET` | `/api/v1/portal/conversations/{id}` | Conversation detail with messages |
+| `GET/PATCH` | `/api/v1/portal/chatbot-config` | Read or update chatbot configuration |
+| `GET` | `/api/v1/portal/analytics` | Lead funnel, source breakdown, trends |
+| `GET` | `/api/v1/portal/analytics/conversations` | Chat volume, top questions, conversion rate |
+| `GET` | `/api/v1/portal/analytics/engagement` | Response times, weekly trends, ROI metrics |
+| `GET` | `/api/v1/portal/notifications` | Notification list with unread count |
 
-Full interactive docs at `/docs` (Swagger) or `/redoc` when the server is running.
+### Admin (Bearer token)
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/api/v1/admin/tenants` | Create tenant (API key shown once) |
+| `GET` | `/api/v1/admin/tenants` | List all tenants |
+| `PATCH` | `/api/v1/admin/tenants/{id}` | Update tenant settings |
+| `DELETE` | `/api/v1/admin/tenants/{id}` | Delete tenant and all data |
+| `POST` | `/api/v1/admin/tenants/{id}/rotate-key` | Rotate API key |
+| `POST` | `/api/v1/admin/tenants/{id}/ingest` | Scrape and ingest website content |
+| `POST` | `/api/v1/admin/tenants/{id}/portal-users` | Create portal user for tenant |
+| `GET` | `/api/v1/admin/master-analytics` | Cross-tenant analytics |
+
+Full interactive docs at `/docs` (Swagger) or `/redoc`.
 
 ---
 
@@ -228,56 +225,67 @@ Full interactive docs at `/docs` (Swagger) or `/redoc` when the server is runnin
 ```
 .
 ├── backend/
-│   ├── main.py                  # FastAPI app, lifespan, CORS, routes
+│   ├── main.py                  # FastAPI app, CORS, route registration
 │   ├── config.py                # Pydantic settings from .env
-│   ├── database.py              # Async SQLAlchemy + pgvector engine
+│   ├── database.py              # Async SQLAlchemy + pgvector
 │   ├── models/
 │   │   ├── tenant.py            # Client accounts, billing, widget config
 │   │   ├── document.py          # Content chunks with vector embeddings
-│   │   └── conversation.py      # Chat session logs
+│   │   ├── conversation.py      # Chat session logs
+│   │   ├── lead.py              # Captured leads with status tracking
+│   │   ├── client_user.py       # Portal login accounts (per-tenant)
+│   │   ├── message.py           # Threaded replies (email/SMS/internal)
+│   │   └── notification.py      # In-app notification system
 │   ├── api/
-│   │   ├── schemas.py           # Request/response validation (Pydantic)
-│   │   ├── chat.py              # RAG chat endpoint with similarity filtering
-│   │   └── admin.py             # Tenant CRUD, ingestion, stats, widget config
+│   │   ├── chat.py              # RAG chat + lead capture + notifications
+│   │   ├── admin.py             # Tenant CRUD, portal user management
+│   │   ├── portal.py            # Client portal API (47 routes)
+│   │   ├── portal_schemas.py    # Pydantic models for portal
+│   │   └── schemas.py           # Pydantic models for admin/chat
 │   ├── ingestion/
 │   │   ├── scraper.py           # Async BFS website crawler
-│   │   ├── chunker.py           # Recursive text splitter with semantic boundaries
-│   │   ├── embedder.py          # Voyage AI embeddings (thread-pool, non-blocking)
-│   │   └── dimension.py         # Auto-detect embedding dimensions per model
-│   └── security/
-│       ├── auth.py              # API key generation, hashing, validation
-│       ├── admin_auth.py        # Bearer token admin authentication
-│       ├── rate_limiter.py      # Redis sorted-set sliding window
-│       └── guardrails.py        # Prompt injection detection + response filtering
-├── widget/
-│   ├── wonderchat-widget.js     # Embeddable chat widget (Shadow DOM)
-│   └── test.html                # Test page simulating a client site
+│   │   ├── chunker.py           # Recursive text splitter
+│   │   ├── embedder.py          # Voyage AI embeddings (non-blocking)
+│   │   └── dimension.py         # Auto-detect embedding dimensions
+│   ├── security/
+│   │   ├── auth.py              # API key hashing and validation
+│   │   ├── admin_auth.py        # Bearer token admin auth
+│   │   ├── portal_auth.py       # JWT auth with tenant isolation
+│   │   ├── rate_limiter.py      # Redis sliding-window rate limiter
+│   │   └── guardrails.py        # Prompt injection detection
+│   └── services/
+│       └── sms.py               # Twilio SMS integration
+├── portal/                      # Next.js client portal (11 pages)
+│   └── src/
+│       ├── app/                 # Dashboard, leads, inbox, analytics, config...
+│       ├── components/          # Sidebar, auth guard
+│       └── lib/api.ts           # Typed API client
 ├── admin/                       # Next.js admin dashboard
-│   ├── src/app/                 # App router pages (login, dashboard, tenants)
-│   ├── src/components/          # Sidebar, auth guard
-│   └── src/lib/api.ts           # Typed API client with error handling
-├── static/
-│   └── widget.js                # Served by the backend at /static
-├── docker-compose.yml           # PostgreSQL 16 (pgvector) + Redis 7
-├── .env.example                 # Template for environment variables
-└── requirements.txt             # Python dependencies
+│   └── src/
+│       ├── app/                 # Login, dashboard, tenant management
+│       ├── components/          # Sidebar, auth guard
+│       └── lib/api.ts           # Typed API client
+├── widget/
+│   └── wonderchat-widget.js     # Embeddable chat widget (Shadow DOM)
+├── static/widget.js             # Served by backend at /static
+├── docker-compose.yml           # PostgreSQL 16 + Redis 7
+└── .env.example                 # Environment variable template
 ```
 
 ---
 
 ## Security
 
-This isn't a toy. The security layer is production-aware:
-
-- **API keys are hashed** with SHA-256 before storage. The raw key is shown once at creation, then discarded.
-- **Prompt injection detection** scans every user message against known attack patterns ("ignore previous instructions", "you are now", "jailbreak", etc.) and blocks them.
-- **Response validation** checks Claude's output for system prompt leakage before sending it to the visitor.
-- **Rate limiting** uses a Redis sliding window (sorted sets) keyed on IP + API key. No burst exploits at window boundaries.
-- **Shadow DOM isolation** keeps the widget's styles and DOM completely separate from the host page.
-- **XSS prevention** -- source links are built with safe DOM APIs, not innerHTML. URL scheme validation blocks non-HTTP URLs.
-- **Input sanitization** caps message length and strips control characters.
-- **Tenant data isolation** is enforced at the query level. Every database query includes `tenant_id`.
-- **Similarity thresholds** prevent the bot from answering with irrelevant content when it doesn't know.
+- **API keys** hashed with SHA-256 before storage. Raw key shown once at creation.
+- **JWT auth** for portal with tenant_id validation on every request. Tokens are verified against the database user's actual tenant.
+- **Tenant isolation** enforced at the query level -- every database query filters by `tenant_id`.
+- **Prompt injection detection** scans messages against known attack patterns and blocks them.
+- **Response validation** checks Claude's output for system prompt leakage.
+- **Rate limiting** via Redis sliding window (sorted sets), keyed on IP + API key.
+- **Shadow DOM isolation** keeps the widget separate from the host page.
+- **XSS prevention** with safe DOM APIs, URL scheme validation, and input sanitization.
+- **Timing-safe comparison** for auth operations to prevent timing attacks.
+- **Password hashing** with bcrypt for portal user credentials.
 
 See [SECURITY.md](SECURITY.md) for the vulnerability disclosure policy.
 
@@ -285,53 +293,43 @@ See [SECURITY.md](SECURITY.md) for the vulnerability disclosure policy.
 
 ## Tech Stack
 
-| Layer | Technology | Why |
-|-------|-----------|-----|
-| Backend | FastAPI (Python) | Async-native, fast iteration, strong typing with Pydantic |
-| Database | PostgreSQL 16 + pgvector | Vectors and relational data in one place. HNSW indexing. No extra vector DB. |
-| LLM | Claude via Anthropic API | Best instruction-following, stays in scope, doesn't hallucinate |
-| Embeddings | Voyage AI (voyage-3-lite) | Affordable, high quality, swappable (OpenAI also supported) |
-| Rate Limiting | Redis 7 | Sorted-set sliding window, battle-tested |
-| Widget | Vanilla JS + Shadow DOM | Zero framework dependencies on client sites |
-| Admin | Next.js + Tailwind | Fast to build, great DX |
+| Layer | Technology | Purpose |
+|-------|-----------|---------|
+| Backend | FastAPI (async Python) | API server, RAG pipeline, multi-tenant logic |
+| Database | PostgreSQL 16 + pgvector | Relational data + vector search in one database |
+| LLM | Claude (Anthropic) | Grounded Q&A that stays in scope |
+| Embeddings | Voyage AI | High-quality vector embeddings |
+| Cache | Redis 7 | Rate limiting, session management |
+| Client Portal | Next.js 16 + React 19 + Tailwind | Per-tenant lead management dashboard |
+| Admin Panel | Next.js + Tailwind | Platform management UI |
+| Widget | Vanilla JS + Shadow DOM | Zero-dependency embeddable chat |
+| SMS | Twilio | Lead reply via text message |
 
 ---
 
 ## Roadmap
 
-Things planned for upcoming releases. PRs welcome for any of these.
-
 - [x] Multi-tenant backend with RAG pipeline
-- [x] Embeddable widget with full customization (25+ config options)
-- [x] Admin dashboard with tenant management, analytics, and conversation logs
-- [x] Manual text ingestion (FAQs, docs, product info)
-- [x] HNSW vector indexing for fast search at scale
-- [x] Billing period auto-reset and usage enforcement
+- [x] Embeddable widget with 25+ config options
+- [x] Admin dashboard with tenant management
+- [x] Client portal with JWT auth and tenant isolation
+- [x] Lead management with filtering, search, and status tracking
+- [x] Conversation inbox with full message history
+- [x] Reply system (email, SMS, internal notes)
+- [x] In-app notifications with real-time polling
+- [x] Chatbot configuration editor (appearance, behavior, lead capture)
+- [x] Analytics dashboard (lead funnel, chatbot metrics, engagement & ROI)
+- [x] Lead capture during chatbot conversations
+- [x] Demo booking CTA
+- [x] HNSW vector indexing
 - [ ] Streaming responses via SSE/WebSocket
 - [ ] PDF and document upload for knowledge base
-- [ ] Lead capture (name, email, phone) when the bot can't answer
-- [ ] Human handoff with Slack/email notifications
 - [ ] Appointment booking integration (Calendly, Acuity)
 - [ ] Multilingual support with auto language detection
-- [ ] Webhook/n8n integrations for events like "new lead captured"
-- [ ] Stripe billing integration for self-serve client signups
+- [ ] Webhook/n8n integrations
+- [ ] Stripe billing for self-serve signups
 - [ ] One-click deploy (Railway, Render, Fly.io)
 - [ ] HIPAA-compliant mode for healthcare clients
-
----
-
-## Use Cases
-
-WonderChat works for anyone who resells websites or digital services:
-
-- **Web agencies** -- add AI chat to every client site as an upsell
-- **SaaS platforms** -- embed AI support in your product
-- **Freelancers** -- offer "AI assistant setup" as a service
-- **Local businesses** -- answer "what are your hours" 24/7 without paying for live chat
-- **E-commerce** -- product questions answered instantly from your catalog
-- **Healthcare** -- patient FAQ automation (appointment info, insurance, services)
-- **Real estate** -- property and listing questions answered from your site content
-- **Education** -- student FAQ bots for course info, admissions, campus services
 
 ---
 
@@ -340,12 +338,6 @@ WonderChat works for anyone who resells websites or digital services:
 Contributions are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
 If you find a security vulnerability, please report it privately. See [SECURITY.md](SECURITY.md).
-
----
-
-## Star History
-
-If this project is useful to you, consider giving it a star. It helps others find it.
 
 ---
 
@@ -358,7 +350,5 @@ MIT. See [LICENSE](LICENSE) for the full text.
 <div align="center">
 
 Built by [Sai Srujan Seelam](https://github.com/Sai-Srujan-seelam)
-
-If you found this useful, [give it a star](https://github.com/Sai-Srujan-seelam/AI-chatbot-SaaS) -- it helps more people find it.
 
 </div>
